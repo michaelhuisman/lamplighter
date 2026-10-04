@@ -138,6 +138,20 @@ def maintenance_state(
     return result
 
 
+def upcoming_runs(
+    schedules: Iterable[Schedule], names: dict[int, str], now: datetime, limit: int = UPCOMING
+) -> list[Upcoming]:
+    """The next `limit` firings of the given (enabled) schedules, soonest first."""
+    upcoming = []
+    for schedule in schedules:
+        at = next_fire_time(build_trigger(schedule.cron, schedule.timezone), now)
+        if at is not None:
+            template = names.get(schedule.template_id, f"#{schedule.template_id}")
+            upcoming.append(Upcoming(schedule.id, template, schedule.cron, at))
+    upcoming.sort(key=lambda u: u.at)
+    return upcoming[:limit]
+
+
 _LATEST_PER_SCHEDULE = text(
     "SELECT DISTINCT ON (r.schedule_id) r.schedule_id, r.id, r.status,"
     " coalesce(r.finished_at, r.created_at) AS at"
@@ -187,14 +201,6 @@ def build(session: Session, now: datetime | None = None) -> Dashboard:
                 )
             )
 
-    upcoming = []
-    for schedule in schedules.values():
-        at = next_fire_time(build_trigger(schedule.cron, schedule.timezone), now)
-        if at is not None:
-            template = names.get(schedule.template_id, f"#{schedule.template_id}")
-            upcoming.append(Upcoming(schedule.id, template, schedule.cron, at))
-    upcoming.sort(key=lambda u: u.at)
-
     recent = [
         RunLink(r.id, names.get(r.template_id, f"#{r.template_id}"), r.status, r.finished_at)
         for r in session.scalars(
@@ -213,7 +219,7 @@ def build(session: Session, now: datetime | None = None) -> Dashboard:
         running=active.get(RunStatus.RUNNING, 0),
         hours=hour_buckets(per_hour, now),
         failing=failing,
-        upcoming=upcoming[:UPCOMING],
+        upcoming=upcoming_runs(schedules.values(), names, now),
         recent_failures=recent,
         maintenance=maintenance_state(session.scalars(select(MaintenanceStatus)).all(), now),
     )

@@ -198,6 +198,7 @@ GET   /api/v1/runs/{id}
 GET   /api/v1/runs/{id}/events          paginated
 GET   /api/v1/runs/{id}/stream          SSE, live events
 POST  /api/v1/runs/{id}/cancel
+POST  /api/v1/runs/{id}/relaunch        body: failed_hosts_only (optional)
 
 GET   /healthz                          liveness
 GET   /readyz                           db connection
@@ -581,6 +582,17 @@ pinned to a commit SHA:
   form is saved. A template gets a free name (`<name> (copy)`, `(copy 2)`, ...); a
   schedule keeps everything, including whether it is enabled. The audit entry of the new
   object records `copied_from`. UI only; via the API a GET plus a POST does the same.
+
+## Relaunch
+
+- A finished run can be relaunched (UI button on the run page and
+  `POST /api/v1/runs/{id}/relaunch`, `launch` rights): a new manual run of the same
+  template with the original's effective extra vars and limit, the template's current
+  settings and the latest commit. "Relaunch failed hosts" (`failed_hosts_only`) limits it
+  to the hosts that failed or were unreachable (from the stats). `runs.relaunch_of`
+  (nullable, `ON DELETE SET NULL`) links the new run to the original; the audit entry
+  `run.relaunch` records `relaunched_from`. A run that is still queued or running gives
+  409.
 
 ## Phase 6 — Kubernetes (Helm)
 

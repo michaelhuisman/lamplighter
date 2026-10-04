@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import ActorDep, SessionDep, require
-from app.api.schemas import LaunchIn, RunEventOut, RunEventsPage, RunOut
+from app.api.schemas import LaunchIn, RelaunchIn, RunEventOut, RunEventsPage, RunOut
 from app.core.auth import Action, Principal
 from app.core.db import get_sessionmaker
 from app.models import RunStatus
@@ -70,6 +70,26 @@ def list_events(
     ]
     next_after = items[-1].seq if len(items) == limit else None
     return RunEventsPage(items=items, next_after_seq=next_after)
+
+
+@router.post("/runs/{run_id}/relaunch", response_model=RunOut, status_code=status.HTTP_201_CREATED)
+def relaunch(
+    run_id: int,
+    session: SessionDep,
+    user: Annotated[Principal, Depends(require(Action.LAUNCH))],
+    actor: ActorDep,
+    body: RelaunchIn | None = None,
+) -> RunOut:
+    """A new run with the original's extra vars and limit (409 while it is still active,
+    or with failed_hosts_only when no host failed)."""
+    run = runs.relaunch(
+        session,
+        run_id,
+        triggered_by=user.triggered_by,
+        failed_hosts_only=body.failed_hosts_only if body else False,
+        actor=actor,
+    )
+    return RunOut.model_validate(run)
 
 
 @router.post(

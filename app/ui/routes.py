@@ -75,7 +75,12 @@ def _run_context(session: SessionDep, run_id: int) -> dict[str, Any]:
     run = runs.get(session, run_id)
     template = crud.get(session, Template, run.template_id)
     schedule = session.get(Schedule, run.schedule_id) if run.schedule_id else None
-    return {"run": run, "template": template, "schedule": schedule}
+    return {
+        "run": run,
+        "template": template,
+        "schedule": schedule,
+        "failed_hosts": runs.failed_hosts(run),
+    }
 
 
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
@@ -97,6 +102,25 @@ def run_cancel(request: Request, run_id: int, session: SessionDep, user: CanCanc
         error = str(exc)
     ctx = _run_context(session, run_id)
     return render(request, "_run_meta.html", user, error=error, **ctx)
+
+
+@router.post("/runs/{run_id}/relaunch", response_class=HTMLResponse)
+async def run_relaunch(
+    request: Request, run_id: int, session: SessionDep, user: CanLaunch
+) -> Response:
+    form = await request.form()
+    try:
+        new = runs.relaunch(
+            session,
+            run_id,
+            triggered_by=user.triggered_by,
+            failed_hosts_only=form.get("failed_hosts_only") == "1",
+            actor=actor(request, user),
+        )
+    except ServiceError as exc:
+        ctx = _run_context(session, run_id)
+        return render(request, "run_detail.html", user, code=409, error=str(exc), **ctx)
+    return redirect(f"/ui/runs/{new.id}")
 
 
 # --- templates -------------------------------------------------------------

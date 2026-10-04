@@ -372,13 +372,15 @@ def test_dashboard_shows_failures_and_failing_schedules(env: Env) -> None:
     assert "Runs per hour" in text
     failing = text.split("Failing schedules", 1)[1].split("Upcoming runs", 1)[0]
     assert template["name"] in failing
-    upcoming = text.split("Upcoming runs", 1)[1].split("Recent failures", 1)[0]
-    assert template["name"] in upcoming
+    # Which schedules are "upcoming" depends on all schedules in the database; the
+    # selection itself is unit-tested (test_dashboard.py).
+    assert "Upcoming runs" in text
     assert "Maintenance" in text
     # The htmx refresh returns only the panels.
     partial = ui.get("/dashboard", headers={"HX-Request": "true"}).text
     assert 'id="dash"' in partial
     assert "<html" not in partial
+    env.api.delete(f"/schedules/{schedule['id']}")
 
 
 def test_dashboard_is_the_start_page() -> None:

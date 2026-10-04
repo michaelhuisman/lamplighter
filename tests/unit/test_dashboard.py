@@ -10,6 +10,7 @@ from app.services.dashboard import (
     hour_buckets,
     maintenance_state,
     success_rate,
+    upcoming_runs,
 )
 
 NOW = datetime(2026, 10, 1, 14, 37, tzinfo=UTC)
@@ -69,3 +70,19 @@ def test_maintenance_state() -> None:
     assert not retention.last_failed
     assert retention.last_error is None
     assert not other.configured
+
+
+def test_upcoming_runs_soonest_first() -> None:
+    schedules = [
+        SimpleNamespace(id=1, template_id=10, cron="0 0 1 1 *", timezone="UTC"),
+        SimpleNamespace(id=2, template_id=11, cron="0 15 * * *", timezone="UTC"),
+        SimpleNamespace(id=3, template_id=12, cron="45 14 * * *", timezone="Europe/Amsterdam"),
+        SimpleNamespace(id=4, template_id=99, cron="*/5 * * * *", timezone="UTC"),
+    ]
+    result = upcoming_runs(schedules, {10: "yearly", 11: "daily", 12: "local"}, NOW, limit=3)  # type: ignore[arg-type]
+    assert [u.schedule_id for u in result] == [4, 2, 3]
+    assert result[0].at == NOW.replace(minute=40)
+    assert result[0].template == "#99"  # unknown template id
+    assert result[1].at == NOW.replace(hour=15, minute=0)
+    # 14:45 in Amsterdam (UTC+2 in October) is 12:45 UTC tomorrow.
+    assert result[2].at == (NOW + timedelta(days=1)).replace(hour=12, minute=45)

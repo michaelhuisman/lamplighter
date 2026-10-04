@@ -314,3 +314,5 @@ a.tile:hover { text-decoration: none; background: var(--accent-soft); }
   .chart { overflow-x: auto; }
   .chart svg { min-width: 600px; }
 }
+.run-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.run-actions form { margin: 0; }
