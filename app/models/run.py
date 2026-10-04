@@ -49,7 +49,9 @@ class Run(Entity):
         ),
     )
 
-    template_id: Mapped[int] = mapped_column(ForeignKey("templates.id"))
+    # NULL once the template is deleted; the run then keeps its name in template_name.
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("templates.id", ondelete="SET NULL"))
+    template_name: Mapped[str | None] = mapped_column(Text)
     schedule_id: Mapped[int | None] = mapped_column(ForeignKey("schedules.id", ondelete="SET NULL"))
     scheduled_for: Mapped[datetime | None]
     # Set when this run is a relaunch of an earlier run.

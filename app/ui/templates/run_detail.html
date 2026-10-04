@@ -2,7 +2,7 @@
 {% block title %}Run {{ run.id }} · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Run {{ run.id }} <span class="muted">· {{ template.name }}</span></h1>
+  <h1>Run {{ run.id }} <span class="muted">· {{ template.name if template else (run.template_name or 'deleted template') }}{% if not template %} (deleted){% endif %}</span></h1>
   <a class="button secondary" href="/ui/runs">← All runs</a>
 </div>
 {% include "_run_meta.html" %}

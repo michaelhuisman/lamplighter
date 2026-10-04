@@ -6,7 +6,7 @@
   {% for r in runs %}
     <tr>
       <td><a href="/ui/runs/{{ r.id }}">{{ r.id }}</a></td>
-      <td class="nowrap">{{ template_names.get(r.template_id, r.template_id) }}</td>
+      <td class="nowrap">{{ template_label(r, template_names) }}{% if r.template_id is none %} <span class="muted">(deleted)</span>{% endif %}</td>
       <td>{% with status=r.status %}{% include "_status.html" %}{% endwith %}</td>
       <td class="muted">{{ r.triggered_by }}</td>
       <td class="mono">{{ (r.scheduled_for or r.created_at) | dt }}</td>

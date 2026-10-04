@@ -10,7 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import ApiToken, AuditEntry, Run, RunEvent, RunStatsArchive, Template
@@ -19,6 +19,8 @@ from app.models.run import FINAL_STATUSES
 log = logging.getLogger(__name__)
 
 BATCH = 5000
+# Same label as the metrics use for runs whose template name is unknown.
+DELETED_TEMPLATE = "(deleted template)"
 DURATION_BUCKETS = (1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600)
 _FINAL = [s.value for s in FINAL_STATUSES]
 
@@ -95,8 +97,15 @@ def purge_runs(session: Session, days: int, batch: int = BATCH) -> int:
     cutoff, total = _cutoff(days), 0
     while True:
         rows = session.execute(
-            select(Run.id, Run.status, Run.started_at, Run.finished_at, Template.name)
-            .join(Template, Template.id == Run.template_id)
+            select(
+                Run.id,
+                Run.status,
+                Run.started_at,
+                Run.finished_at,
+                # Runs of a deleted template count under the name they kept.
+                func.coalesce(Template.name, Run.template_name, DELETED_TEMPLATE).label("name"),
+            )
+            .outerjoin(Template, Template.id == Run.template_id)
             .where(
                 Run.status.in_(_FINAL),
                 or_(

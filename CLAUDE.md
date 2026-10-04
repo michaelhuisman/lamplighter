@@ -66,7 +66,8 @@ DEV="podman compose -f compose.dev.yml run --rm dev"
 $DEV sh -c 'ruff check . && ruff format --check .'
 $DEV mypy app
 $DEV pytest tests/unit
-$DEV pytest tests/integration     # requires a running compose.dev.yml
+$DEV pytest tests/integration     # requires a running compose.dev.yml; empties the dev
+                                  # data first (keeps your own users; LAMPLIGHTER_IT_KEEP_DATA=1 skips)
 $DEV pytest tests/integration -m "not slow"   # without the tests that wait minutes for cron
 scripts/it-failover.sh            # on the host: kill the scheduler leader, check takeover
 scripts/it-secret-scan.sh         # on the host: no dev secrets in the container logs

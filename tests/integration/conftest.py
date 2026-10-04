@@ -16,11 +16,22 @@ from typing import Any
 
 import httpx
 import pytest
+from sqlalchemy import text
 
-from app.core.db import get_sessionmaker
+from app.core.db import get_engine, get_sessionmaker
 from app.services import api_tokens, users
 
 API_URL = os.environ.get("LAMPLIGHTER_IT_API_URL", "http://127.0.0.1:8000")
+
+# Everything the tests create, emptied at the start of every test session so the dev
+# environment does not keep filling up. Users are handled separately (see below).
+_TEST_TABLES = (
+    "runs, run_events, notifications, schedules, templates, inventories, projects,"
+    " credentials, categories, audit_log, run_stats_archive, maintenance_status"
+)
+# Local users the tests create: it-admin, it-viewer, it-tok-1a2b3c4d, dash-1a2b3c4d, ...
+# Other accounts (your own admin, Keycloak users) are kept.
+_TEST_USER = r"^(it-.*|[a-z]+(-[a-z]+)*-[0-9a-f]{8})$"
 FIXTURE_REPO = Path("/fixtures/repo.git")
 RUNTIME_DIR = Path("/run/lamplighter")
 SECRETS_DIR = Path("/secrets")
@@ -53,6 +64,25 @@ def ensure_local_user(username: str, roles: list[str]) -> LocalUser:
             user = users.update_local(s, user.id, roles=roles, disabled=False)
         token = api_tokens.create(s, user, "integration tests", expires_days=1)
     return LocalUser(username, password, token.raw)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_dev_database() -> None:
+    """Start every test session with an empty dev environment.
+
+    Only inside the dev container (LAMPLIGHTER_IT_API_URL is set there), never against
+    another database. Set LAMPLIGHTER_IT_KEEP_DATA=1 to keep the data, e.g. while
+    debugging a single test.
+    """
+    if "LAMPLIGHTER_IT_API_URL" not in os.environ or os.environ.get("LAMPLIGHTER_IT_KEEP_DATA"):
+        return
+    with get_engine().begin() as conn:
+        conn.execute(text(f"TRUNCATE {_TEST_TABLES} RESTART IDENTITY CASCADE"))
+        # Sessions and API tokens of these users go with them (ON DELETE CASCADE).
+        conn.execute(
+            text("DELETE FROM users WHERE source = 'local' AND username ~ :pattern"),
+            {"pattern": _TEST_USER},
+        )
 
 
 @pytest.fixture(scope="session")

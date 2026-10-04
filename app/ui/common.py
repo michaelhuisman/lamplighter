@@ -17,6 +17,7 @@ from app.core.auth import CSRF_FIELD, Action, Principal, client_ip
 from app.core.config import get_settings
 from app.models.run import FINAL_STATUSES
 from app.services.audit import Actor
+from app.services.runs import template_label
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -57,6 +58,7 @@ def static(path: str) -> str:
 templates.env.filters["dt"] = _fmt_dt
 templates.env.globals["static"] = static
 templates.env.globals["duration"] = _fmt_duration
+templates.env.globals["template_label"] = template_label
 
 CanLaunch = Annotated[Principal, Depends(require(Action.LAUNCH))]
 CanCancel = Annotated[Principal, Depends(require(Action.CANCEL))]

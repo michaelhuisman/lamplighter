@@ -89,6 +89,8 @@ def _ref(cred: Credential) -> CredentialRef:
 def load_spec(session: Session, run_id: int) -> RunSpec:
     with session.begin():
         run = session.get_one(Run, run_id)
+        if run.template_id is None:
+            raise RunSetupError(queue.TEMPLATE_DELETED)
         template = session.get_one(Template, run.template_id)
         project = session.get_one(Project, template.project_id)
         inventory = session.get_one(Inventory, template.inventory_id)

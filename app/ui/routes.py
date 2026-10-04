@@ -19,6 +19,7 @@ from app.models import Credential, Inventory, Project, Schedule, Template
 from app.models.run import RunStatus
 from app.scheduler.trigger import build_trigger, next_fire_time
 from app.services import categories, crud, dashboard, runs, schedules
+from app.services import templates as template_service
 from app.services.errors import ServiceError
 from app.ui.common import (
     CanCancel,
@@ -84,7 +85,8 @@ def runs_page(
 
 def _run_context(session: SessionDep, run_id: int) -> dict[str, Any]:
     run = runs.get(session, run_id)
-    template = crud.get(session, Template, run.template_id)
+    # None once the template is deleted; the run keeps its name (template_name).
+    template = session.get(Template, run.template_id) if run.template_id is not None else None
     schedule = session.get(Schedule, run.schedule_id) if run.schedule_id else None
     return {
         "run": run,
@@ -167,6 +169,7 @@ def templates_page(
         category=cat,
         categories=cats,
         category_by_id={c.id: c for c in cats},
+        usage=template_service.usage(session),
     )
 
 
@@ -294,7 +297,7 @@ def template_delete(
     request: Request, template_id: int, session: SessionDep, user: CanConfigure
 ) -> Response:
     try:
-        crud.delete(session, Template, template_id, actor=actor(request, user))
+        template_service.delete(session, template_id, actor=actor(request, user))
     except ServiceError as exc:
         return HTMLResponse(f'<span class="error">{html.escape(str(exc))}</span>', status_code=409)
     return HTMLResponse("", headers={"HX-Refresh": "true"})

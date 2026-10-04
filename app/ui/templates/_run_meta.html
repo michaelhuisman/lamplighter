@@ -32,7 +32,9 @@
     </table></div>
     {% endif %}
   {% endif %}
-  {% if run.status in FINAL_STATUSES and user.can(Action.LAUNCH) %}
+  {% if run.status in FINAL_STATUSES and user.can(Action.LAUNCH) and not template %}
+    <p class="muted run-actions">The template of this run was deleted: it cannot be relaunched.</p>
+  {% elif run.status in FINAL_STATUSES and user.can(Action.LAUNCH) %}
     <div class="run-actions">
       <form method="post" action="/ui/runs/{{ run.id }}/relaunch">
         {% include "_csrf.html" %}

@@ -186,7 +186,9 @@ class RelaunchIn(BaseModel):
 
 class RunOut(OrmModel):
     id: int
-    template_id: int
+    # None once the template is deleted; template_name is then the name the run kept.
+    template_id: int | None
+    template_name: str | None
     schedule_id: int | None
     scheduled_for: datetime | None
     relaunch_of: int | None

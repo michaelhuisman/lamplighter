@@ -21,19 +21,22 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.services.retention import DURATION_BUCKETS
 
+# Runs of a deleted template keep counting under the name they kept (runs.template_name).
+_TEMPLATE = "coalesce(t.name, r.template_name, '(deleted template)')"
+
 _RUNS_BY_STATUS = text(
-    "SELECT t.name AS template, r.status, count(*) AS n"
-    " FROM runs r JOIN templates t ON t.id = r.template_id"
-    " GROUP BY t.name, r.status"
+    f"SELECT {_TEMPLATE} AS template, r.status, count(*) AS n"  # noqa: S608
+    " FROM runs r LEFT JOIN templates t ON t.id = r.template_id"
+    " GROUP BY 1, r.status"
 )
 
 _bucket_cols = ", ".join(f"count(*) FILTER (WHERE d <= {b}) AS le_{b}" for b in DURATION_BUCKETS)
 _DURATIONS = text(
     # Only constant bucket bounds in the f-string, no input.
     f"SELECT template, {_bucket_cols}, count(*) AS n, coalesce(sum(d), 0) AS total"  # noqa: S608
-    " FROM (SELECT t.name AS template,"
+    f" FROM (SELECT {_TEMPLATE} AS template,"
     "  extract(epoch FROM r.finished_at - r.started_at) AS d"
-    "  FROM runs r JOIN templates t ON t.id = r.template_id"
+    "  FROM runs r LEFT JOIN templates t ON t.id = r.template_id"
     "  WHERE r.started_at IS NOT NULL AND r.finished_at IS NOT NULL) x"
     " GROUP BY template"
 )
@@ -50,10 +53,11 @@ _ARCHIVE = text(
 )
 
 _LAST_SUCCESS = text(
-    "SELECT r.schedule_id, t.name AS template, extract(epoch FROM max(r.finished_at)) AS ts"
-    " FROM runs r JOIN templates t ON t.id = r.template_id"
+    f"SELECT r.schedule_id, {_TEMPLATE} AS template,"  # noqa: S608
+    " extract(epoch FROM max(r.finished_at)) AS ts"
+    " FROM runs r LEFT JOIN templates t ON t.id = r.template_id"
     " WHERE r.schedule_id IS NOT NULL AND r.status = 'successful'"
-    " GROUP BY r.schedule_id, t.name"
+    " GROUP BY r.schedule_id, 2"
 )
 
 
