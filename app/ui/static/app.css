@@ -270,7 +270,8 @@ fieldset.choice label.check { flex: 0 0 auto; }
 /* --- dashboard ----------------------------------------------------------------------- */
 .sidebar nav a.nav-top { margin-top: 10px; }
 .dash-updated { margin: -8px 0 14px; font-size: 13px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px;
+/* Six tiles; always full rows (6, 3+3 or 2+2+2), aligned with the panels below. */
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
   margin-bottom: 16px; }
 .tile { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; background: var(--surface);
   border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 6px;
@@ -329,3 +330,5 @@ a.tile:hover { text-decoration: none; background: var(--accent-soft); }
 .cat-gray { background: rgba(125, 140, 160, .18); color: var(--muted); }
 /* Filters in a page header sit on the right, next to the buttons (not in the middle). */
 .page-head .filters { margin-left: auto; }
+@media (max-width: 1280px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
