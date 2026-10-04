@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/michaelhuisman/ansiblesched/actions/workflows/ci.yml"><img src="https://github.com/michaelhuisman/ansiblesched/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/michaelhuisman/lamplighter/actions/workflows/ci.yml"><img src="https://github.com/michaelhuisman/lamplighter/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12">
   <img src="https://img.shields.io/badge/postgres-18-4169E1" alt="Postgres 18">
-  <a href="https://github.com/michaelhuisman/ansiblesched/pkgs/container/lamplighter"><img src="https://img.shields.io/badge/image-ghcr.io-2496ED" alt="Container image"></a>
+  <a href="https://github.com/michaelhuisman/lamplighter/pkgs/container/lamplighter"><img src="https://img.shields.io/badge/image-ghcr.io-2496ED" alt="Container image"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
 </p>
 
@@ -135,8 +135,8 @@ page.
 ### 3. Configure the deployment
 
 ```bash
-git clone https://github.com/michaelhuisman/ansiblesched.git
-cd ansiblesched/deploy
+git clone https://github.com/michaelhuisman/lamplighter.git
+cd lamplighter/deploy
 pip install -r requirements.txt
 ansible-galaxy collection install -r requirements.yml
 
@@ -165,11 +165,11 @@ The most important variables (all of them are in
 ### 4. Deploy
 
 Pick an image from the
-[container registry](https://github.com/michaelhuisman/ansiblesched/pkgs/container/lamplighter):
+[container registry](https://github.com/michaelhuisman/lamplighter/pkgs/container/lamplighter):
 every build of `main` is tagged with its full git SHA.
 
 ```bash
-cd ansiblesched/deploy
+cd lamplighter/deploy
 ansible-playbook site.yml -i ~/lamplighter-inventory/hosts.yml --ask-vault-pass \
     -e lamplighter_image_tag=<git-sha>
 ```
