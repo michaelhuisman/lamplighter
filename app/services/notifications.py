@@ -92,11 +92,15 @@ def sign(body: bytes, secret: str) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
-def build_payload(run: Run, template: Template, event: str, public_url: str) -> dict[str, Any]:
+def build_payload(
+    run: Run, template: Template | None, event: str, public_url: str
+) -> dict[str, Any]:
+    # The template can be deleted before the webhook goes out; the run kept its name.
+    name = template.name if template is not None else run.template_name
     return {
         "event": event,
         "run_id": run.id,
-        "template": {"id": template.id, "name": template.name},
+        "template": {"id": template.id if template is not None else None, "name": name},
         "schedule_id": run.schedule_id,
         "status": run.status,
         "rc": run.rc,
@@ -144,7 +148,7 @@ def deliver_due(
         ).all()
         for note in due:
             run = session.get_one(Run, note.run_id)
-            template = session.get_one(Template, run.template_id)
+            template = session.get(Template, run.template_id) if run.template_id else None
             error = _send(client, urls.get(note.target), note, run, template, public_url, secret)
             note.attempts += 1
             if error is None:
@@ -170,7 +174,7 @@ def _send(
     url: str | None,
     note: Notification,
     run: Run,
-    template: Template,
+    template: Template | None,
     public_url: str,
     secret: str | None,
 ) -> str | None:

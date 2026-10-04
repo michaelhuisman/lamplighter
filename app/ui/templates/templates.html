@@ -30,8 +30,10 @@
         {% if user.can(Action.CONFIGURE) %}
           <a class="button small secondary" href="/ui/templates/{{ t.id }}/edit">Edit</a>
           <a class="button small secondary" href="/ui/templates/{{ t.id }}/copy">Copy</a>
+          {% set u = usage.get(t.id) %}
+          {% set consequences %}{% if u and u.runs %} Its {{ u.runs }} run(s) stay in the history.{% endif %}{% if u and u.schedules %} Its {{ u.schedules }} schedule(s) will be deleted too.{% endif %}{% endset %}
           <button class="small danger" hx-post="/ui/templates/{{ t.id }}/delete" hx-target="next .row-error"
-                  hx-confirm="Delete template '{{ t.name }}'?">Delete</button>
+                  hx-confirm="Delete template '{{ t.name }}'?{{ consequences }}">Delete</button>
           <span class="row-error"></span>
         {% endif %}
       </td>

@@ -1,6 +1,6 @@
 """Starting, fetching and canceling runs (API side)."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -51,6 +51,13 @@ def launch(
     return run
 
 
+def template_label(run: Run, names: Mapping[int, str]) -> str:
+    """The name of the run's template; for a deleted template the name the run kept."""
+    if run.template_id is not None:
+        return names.get(run.template_id, f"#{run.template_id}")
+    return run.template_name or "(deleted template)"
+
+
 def failed_hosts(run: Run) -> list[str]:
     """Hosts that failed or were unreachable, from the run's stats (sorted)."""
     stats = run.stats or {}
@@ -83,6 +90,8 @@ def relaunch(
         if not hosts:
             raise ConflictError(f"run {run_id} has no failed or unreachable hosts")
         limit = ",".join(hosts)
+    if original.template_id is None:
+        raise ConflictError(f"the template of run {run_id} was deleted")
     crud.get(session, Template, original.template_id)
     run = Run(
         template_id=original.template_id,

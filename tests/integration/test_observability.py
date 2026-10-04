@@ -334,12 +334,16 @@ def test_ui_cancel_running_run(ui: httpx.Client, env: Env) -> None:
     assert env.wait(run_id, timeout=30)["status"] == "canceled"
 
 
-def test_ui_delete_template_in_use_shows_error(ui: httpx.Client, env: Env) -> None:
-    template = env.template("ping.yml")
-    env.wait(env.launch(template)["id"])
+def test_ui_delete_template_with_active_run_shows_error(ui: httpx.Client, env: Env) -> None:
+    # Finished runs no longer block deleting (they stay in the history); active runs do.
+    template = env.template("sleep.yml", extra_vars={"sleep_s": 30})
+    run = env.launch(template)
+    env.wait(run["id"], {"running"})
     resp = ui.post(f"/templates/{template['id']}/delete")
     assert resp.status_code == 409
-    assert "in use" in resp.text
+    assert "queued or running" in resp.text
+    env.api.post(f"/runs/{run['id']}/cancel")
+    env.wait(run["id"])
 
 
 # --- dashboard ------------------------------------------------------------------------

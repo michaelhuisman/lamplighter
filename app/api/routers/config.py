@@ -11,7 +11,7 @@ from app.api import schemas
 from app.api.deps import ActorDep, SessionDep, require
 from app.core.auth import Action
 from app.models import Category, Credential, Entity, Inventory, Project, Schedule, Template
-from app.services import categories, crud, schedules
+from app.services import categories, crud, schedules, templates
 
 READ = [Depends(require(Action.READ))]
 CONFIGURE = [Depends(require(Action.CONFIGURE))]
@@ -24,6 +24,7 @@ def crud_router[In: BaseModel, Out: BaseModel](
     schema_out: type[Out],
     on_change: Callable[[Session], None] | None = None,
     by_category: Callable[[Session, categories.CategoryFilter], Sequence[Entity]] | None = None,
+    deleter: Callable[..., object] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix=f"/{prefix}", tags=[prefix])
 
@@ -76,7 +77,10 @@ def crud_router[In: BaseModel, Out: BaseModel](
 
     @router.delete("/{obj_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=CONFIGURE)
     def delete_item(obj_id: int, session: SessionDep, actor: ActorDep) -> None:
-        crud.delete(session, model, obj_id, actor=actor)
+        if deleter is not None:
+            deleter(session, obj_id, actor=actor)
+        else:
+            crud.delete(session, model, obj_id, actor=actor)
         changed(session)
 
     return router
@@ -93,6 +97,8 @@ routers = [
         schemas.TemplateIn,
         schemas.TemplateOut,
         by_category=categories.list_templates,
+        # Keeps the run history and deletes the template's schedules too.
+        deleter=templates.delete,
     ),
     crud_router(
         "schedules",

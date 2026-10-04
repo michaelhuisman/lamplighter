@@ -11,6 +11,7 @@ from app.core.locks import NS_TEMPLATE
 from app.models import Notification, Run, RunEvent, RunStatus
 
 CLAIM_BATCH = 20
+TEMPLATE_DELETED = "template was deleted"
 # Outbox row that the scheduler still has to expand to the current webhook targets.
 ALL_TARGETS = "*"
 NOTIFY_STATUSES = frozenset({RunStatus.FAILED, RunStatus.ERROR, RunStatus.TIMEOUT})
@@ -57,6 +58,19 @@ def claim(session: Session, worker_id: str, locker: TemplateLocker) -> Claimed |
     try:
         with session.begin():
             for run_id, template_id, policy in session.execute(candidates).all():
+                if template_id is None:
+                    # The template was deleted while this run waited (deleting refuses
+                    # templates with queued runs, so only in a race).
+                    session.execute(
+                        update(Run)
+                        .where(Run.id == run_id)
+                        .values(
+                            status=RunStatus.ERROR,
+                            status_reason=TEMPLATE_DELETED,
+                            finished_at=func.now(),
+                        )
+                    )
+                    continue
                 if locker.try_lock(template_id):
                     locked = template_id
                     session.execute(

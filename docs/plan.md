@@ -608,6 +608,18 @@ pinned to a commit SHA:
   the same query parameter on `GET /api/v1/templates`, `/schedules` and `/runs`
   (`app/services/categories.py`).
 
+## Deleting templates
+
+- Deleting a template keeps its run history: the runs get the template's name in
+  `runs.template_name` and lose the reference (`runs.template_id` is nullable, `ON DELETE
+  SET NULL`). Its schedules are deleted too (and the scheduler is notified). Refused with
+  409 while runs of the template are queued or running. The confirmation says how many
+  runs stay and how many schedules go; the audit entry records both
+  (`app/services/templates.py`).
+- Runs of a deleted template show their kept name with "(deleted)", cannot be relaunched,
+  and keep counting in the metrics and retention archive under that name. A run that is
+  still queued when its template disappears (a race) ends as `error`.
+
 ## Phase 6 — Kubernetes (Helm)
 
 **Scope:** a Helm chart as an alternative to Docker Compose: deployments for api,

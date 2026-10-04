@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import MaintenanceStatus, Run, RunStatus, Schedule, Template
 from app.scheduler.trigger import build_trigger, next_fire_time
+from app.services import runs
 
 WINDOW_HOURS = 24
 # A daily task that has not succeeded for longer than this needs attention.
@@ -202,7 +203,7 @@ def build(session: Session, now: datetime | None = None) -> Dashboard:
             )
 
     recent = [
-        RunLink(r.id, names.get(r.template_id, f"#{r.template_id}"), r.status, r.finished_at)
+        RunLink(r.id, runs.template_label(r, names), r.status, r.finished_at)
         for r in session.scalars(
             select(Run)
             .where(Run.status.in_(BAD))
