@@ -575,6 +575,14 @@ pinned to a commit SHA:
   successful), the next 5 scheduled runs, the last 10 failures and the maintenance status
   (backup and retention; overdue after 26 hours). Refreshes every 15s via htmx.
 
+## Copying templates and schedules
+
+- "Copy" (list and edit page, `admin`) opens the "new" form filled in from the original:
+  `/ui/templates/{id}/copy` and `/ui/schedules/{id}/copy`. Nothing is created until the
+  form is saved. A template gets a free name (`<name> (copy)`, `(copy 2)`, ...); a
+  schedule keeps everything, including whether it is enabled. The audit entry of the new
+  object records `copied_from`. UI only; via the API a GET plus a POST does the same.
+
 ## Relaunch
 
 - A finished run can be relaunched (UI button on the run page and

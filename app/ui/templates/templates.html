@@ -20,6 +20,7 @@
         <a class="button small secondary" href="/ui/runs?template_id={{ t.id }}">Runs</a>
         {% if user.can(Action.CONFIGURE) %}
           <a class="button small secondary" href="/ui/templates/{{ t.id }}/edit">Edit</a>
+          <a class="button small secondary" href="/ui/templates/{{ t.id }}/copy">Copy</a>
           <button class="small danger" hx-post="/ui/templates/{{ t.id }}/delete" hx-target="next .row-error"
                   hx-confirm="Delete template '{{ t.name }}'?">Delete</button>
           <span class="row-error"></span>

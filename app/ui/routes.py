@@ -157,22 +157,54 @@ def template_new(request: Request, session: SessionDep, user: CanConfigure) -> H
     )
 
 
+def _template_form(item: Template) -> dict[str, Any]:
+    form = TemplateIn.model_validate(item, from_attributes=True).model_dump()
+    form["extra_vars"] = json.dumps(form["extra_vars"], indent=2) if form["extra_vars"] else ""
+    return form
+
+
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
 def template_edit(
     request: Request, template_id: int, session: SessionDep, user: CanConfigure
 ) -> HTMLResponse:
     item = crud.get(session, Template, template_id)
-    form = TemplateIn.model_validate(item, from_attributes=True).model_dump()
-    form["extra_vars"] = json.dumps(form["extra_vars"], indent=2) if form["extra_vars"] else ""
     return render(
         request,
         "template_form.html",
         user,
         item=item,
+        form=_template_form(item),
+        errors={},
+        **_template_choices(session),
+    )
+
+
+@router.get("/templates/{template_id}/copy", response_class=HTMLResponse)
+def template_copy(
+    request: Request, template_id: int, session: SessionDep, user: CanConfigure
+) -> HTMLResponse:
+    """The "new template" form, filled in from an existing template. Nothing is created
+    until the form is saved."""
+    source = crud.get(session, Template, template_id)
+    form = _template_form(source)
+    form["name"] = crud.template_copy_name(session, source.name)
+    form["copied_from"] = source.id
+    return render(
+        request,
+        "template_form.html",
+        user,
+        item=None,
+        copy_of=source,
         form=form,
         errors={},
         **_template_choices(session),
     )
+
+
+def _copied_from(data: dict[str, Any]) -> dict[str, int] | None:
+    """Audit detail for a copy; the hidden form field is not part of the schema."""
+    raw = data.pop("copied_from", None)
+    return {"copied_from": int(raw)} if isinstance(raw, str) and raw.isdigit() else None
 
 
 def _save_template(
@@ -180,13 +212,20 @@ def _save_template(
 ) -> Response:
     errors: dict[str, str] = {}
     data = clean(form)
+    copied = _copied_from(data)
     data["extra_vars"] = parse_json(data.get("extra_vars"), "extra_vars", errors)
     data["verbosity"] = data.get("verbosity") or 0
     parsed = validate(TemplateIn, data, errors)
     if parsed is not None and not errors:
         try:
             if template_id is None:
-                crud.create(session, Template, parsed.model_dump(), actor=actor(request, user))
+                crud.create(
+                    session,
+                    Template,
+                    parsed.model_dump(),
+                    actor=actor(request, user),
+                    audit_details=copied,
+                )
             else:
                 crud.update(
                     session, Template, template_id, parsed.model_dump(), actor=actor(request, user)
@@ -196,12 +235,14 @@ def _save_template(
         else:
             return redirect("/ui/templates")
     item = crud.get(session, Template, template_id) if template_id else None
+    copy_of = session.get(Template, copied["copied_from"]) if copied else None
     return render(
         request,
         "template_form.html",
         user,
         code=422,
         item=item,
+        copy_of=copy_of,
         form=form,
         errors=errors,
         **_template_choices(session),
@@ -305,19 +346,44 @@ def schedule_new(request: Request, session: SessionDep, user: CanConfigure) -> H
     )
 
 
+def _schedule_form(item: Schedule) -> dict[str, Any]:
+    form = ScheduleIn.model_validate(item, from_attributes=True).model_dump()
+    override = form["extra_vars_override"]
+    form["extra_vars_override"] = json.dumps(override, indent=2) if override else ""
+    return form
+
+
 @router.get("/schedules/{schedule_id}/edit", response_class=HTMLResponse)
 def schedule_edit(
     request: Request, schedule_id: int, session: SessionDep, user: CanConfigure
 ) -> HTMLResponse:
     item = crud.get(session, Schedule, schedule_id)
-    form = ScheduleIn.model_validate(item, from_attributes=True).model_dump()
-    override = form["extra_vars_override"]
-    form["extra_vars_override"] = json.dumps(override, indent=2) if override else ""
     return render(
         request,
         "schedule_form.html",
         user,
         item=item,
+        form=_schedule_form(item),
+        errors={},
+        templates=crud.list_all(session, Template),
+    )
+
+
+@router.get("/schedules/{schedule_id}/copy", response_class=HTMLResponse)
+def schedule_copy(
+    request: Request, schedule_id: int, session: SessionDep, user: CanConfigure
+) -> HTMLResponse:
+    """The "new schedule" form, filled in from an existing schedule (including whether it
+    is enabled). Nothing is created until the form is saved."""
+    source = crud.get(session, Schedule, schedule_id)
+    form = _schedule_form(source)
+    form["copied_from"] = source.id
+    return render(
+        request,
+        "schedule_form.html",
+        user,
+        item=None,
+        copy_of=source,
         form=form,
         errors={},
         templates=crud.list_all(session, Template),
@@ -329,6 +395,7 @@ def _save_schedule(
 ) -> Response:
     errors: dict[str, str] = {}
     data = clean(form)
+    copied = _copied_from(data)
     data["enabled"] = form.get("enabled") == "on"
     data["extra_vars_override"] = parse_json(
         data.get("extra_vars_override"), "extra_vars_override", errors
@@ -339,7 +406,13 @@ def _save_schedule(
     if parsed is not None and not errors:
         try:
             if schedule_id is None:
-                crud.create(session, Schedule, parsed.model_dump(), actor=actor(request, user))
+                crud.create(
+                    session,
+                    Schedule,
+                    parsed.model_dump(),
+                    actor=actor(request, user),
+                    audit_details=copied,
+                )
             else:
                 crud.update(
                     session, Schedule, schedule_id, parsed.model_dump(), actor=actor(request, user)
@@ -350,12 +423,14 @@ def _save_schedule(
         else:
             return redirect("/ui/schedules")
     item = crud.get(session, Schedule, schedule_id) if schedule_id else None
+    copy_of = session.get(Schedule, copied["copied_from"]) if copied else None
     return render(
         request,
         "schedule_form.html",
         user,
         code=422,
         item=item,
+        copy_of=copy_of,
         form=form,
         errors=errors,
         templates=crud.list_all(session, Template),

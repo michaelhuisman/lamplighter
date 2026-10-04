@@ -15,6 +15,7 @@
     <a class="button small secondary" href="/ui/runs?template_id={{ s.template_id }}">Runs</a>
     {% if user.can(Action.CONFIGURE) %}
       <a class="button small secondary" href="/ui/schedules/{{ s.id }}/edit">Edit</a>
+      <a class="button small secondary" href="/ui/schedules/{{ s.id }}/copy">Copy</a>
       <button class="small danger" hx-post="/ui/schedules/{{ s.id }}/delete" hx-target="closest tr" hx-swap="outerHTML"
               hx-confirm="Delete schedule {{ s.id }}?">Delete</button>
     {% endif %}

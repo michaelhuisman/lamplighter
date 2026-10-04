@@ -1,13 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit template' if item else 'New template' }} · lamplighter{% endblock %}
+{% set heading = 'Edit template' if item else ('Copy of ' ~ copy_of.name if copy_of else 'New template') %}
+{% block title %}{{ heading }} · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ 'Edit template' if item else 'New template' }}</h1>
-  <a class="button secondary" href="/ui/templates">Cancel</a>
+  <h1>{{ heading }}</h1>
+  <div class="head-actions">
+    {% if item %}<a class="button secondary" href="/ui/templates/{{ item.id }}/copy">Copy</a>{% endif %}
+    <a class="button secondary" href="/ui/templates">Cancel</a>
+  </div>
 </div>
 {% if errors.get('__all__') %}<p class="error">{{ errors['__all__'] }}</p>{% endif %}
 <form class="card form" method="post" action="{{ '/ui/templates/' ~ item.id if item else '/ui/templates' }}">
   {% include "_csrf.html" %}
+  {% if form.get('copied_from') %}<input type="hidden" name="copied_from" value="{{ form.get('copied_from') }}">{% endif %}
   <label>Name <input name="name" value="{{ form.get('name') or '' }}" required>
     {% with field='name' %}{% include "_field_error.html" %}{% endwith %}</label>
   <div class="row">
