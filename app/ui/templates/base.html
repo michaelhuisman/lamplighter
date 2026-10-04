@@ -25,7 +25,7 @@
   {% if user.can(Action.MANAGE_USERS) %}
     {% set nav = nav + [('Administration', [('users', 'Users'), ('audit', 'Audit')])] %}
   {% endif %}
-  {% set labels = {'account': 'Account', 'dashboard': 'Dashboard'} %}
+  {% set labels = {'account': 'Account', 'dashboard': 'Dashboard', 'categories': 'Categories'} %}
   {% for _, items in nav %}{% for slug, label in items %}{% set _ = labels.update({slug: label}) %}{% endfor %}{% endfor %}
 
   <div class="shell">

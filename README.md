@@ -46,6 +46,8 @@ Redis, message broker or Kubernetes required.
 - **Sign-in your way.** Local users (argon2id, lockout) and/or Keycloak via OIDC with
   PKCE. Three roles: `viewer`, `operator` (launch and cancel) and `admin`. Every change is
   in the audit log.
+- **Organised.** Group templates in categories and filter templates, schedules and runs
+  by category; copy templates and schedules to make variants.
 - **API first.** A REST API with personal API tokens; the web UI uses the same schemas.
 - **Built for failure.** Several workers and scheduler replicas can run side by side:
   queue claims use `SKIP LOCKED` and leader election uses a Postgres advisory lock. A

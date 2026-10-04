@@ -1,16 +1,25 @@
 {% extends "base.html" %}
+{% from "_macros.html" import category_badge, category_filter %}
 {% block title %}Templates · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
   <h1>Templates</h1>
-  {% if user.can(Action.CONFIGURE) %}<a class="button" href="/ui/templates/new">New template</a>{% endif %}
+  <form class="filters" hx-get="/ui/templates" hx-trigger="change" hx-target="#templates-table"
+        hx-select="#templates-table" hx-swap="outerHTML" hx-push-url="true">
+    {{ category_filter(categories, category) }}
+  </form>
+  <div class="head-actions">
+    <a class="button secondary" href="/ui/categories">Categories</a>
+    {% if user.can(Action.CONFIGURE) %}<a class="button" href="/ui/templates/new">New template</a>{% endif %}
+  </div>
 </div>
-<table class="grid">
-  <thead><tr><th>Name</th><th>Project</th><th>Playbook</th><th>Limit</th><th>Timeout</th><th></th></tr></thead>
+<table class="grid" id="templates-table">
+  <thead><tr><th>Name</th><th>Category</th><th>Project</th><th>Playbook</th><th>Limit</th><th>Timeout</th><th></th></tr></thead>
   <tbody>
   {% for t in templates %}
     <tr>
       <td>{{ t.name }}</td>
+      <td>{{ category_badge(category_by_id.get(t.category_id)) }}</td>
       <td class="muted">{{ projects.get(t.project_id, t.project_id) }}</td>
       <td class="mono">{{ t.playbook_path }}</td>
       <td class="mono">{{ t.limit or '' }}</td>
@@ -28,7 +37,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="6" class="empty">No templates yet.</td></tr>
+    <tr><td colspan="7" class="empty">{{ 'No templates in this category.' if category else 'No templates yet.' }}</td></tr>
   {% endfor %}
   </tbody>
 </table>

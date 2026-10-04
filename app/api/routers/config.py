@@ -1,16 +1,17 @@
 """CRUD routers for configuration objects."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api import schemas
 from app.api.deps import ActorDep, SessionDep, require
 from app.core.auth import Action
-from app.models import Credential, Entity, Inventory, Project, Schedule, Template
-from app.services import crud, schedules
+from app.models import Category, Credential, Entity, Inventory, Project, Schedule, Template
+from app.services import categories, crud, schedules
 
 READ = [Depends(require(Action.READ))]
 CONFIGURE = [Depends(require(Action.CONFIGURE))]
@@ -22,6 +23,7 @@ def crud_router[In: BaseModel, Out: BaseModel](
     schema_in: type[In],
     schema_out: type[Out],
     on_change: Callable[[Session], None] | None = None,
+    by_category: Callable[[Session, categories.CategoryFilter], Sequence[Entity]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix=f"/{prefix}", tags=[prefix])
 
@@ -29,9 +31,25 @@ def crud_router[In: BaseModel, Out: BaseModel](
         if on_change is not None:
             on_change(session)
 
-    @router.get("", response_model=list[schema_out], dependencies=READ)  # type: ignore[valid-type]
-    def list_items(session: SessionDep) -> list[Out]:
-        return [schema_out.model_validate(o) for o in crud.list_all(session, model)]
+    if by_category is None:
+
+        @router.get("", response_model=list[schema_out], dependencies=READ)  # type: ignore[valid-type]
+        def list_items(session: SessionDep) -> list[Out]:
+            return [schema_out.model_validate(o) for o in crud.list_all(session, model)]
+
+    else:
+        lister = by_category
+
+        @router.get("", response_model=list[schema_out], dependencies=READ)  # type: ignore[valid-type]
+        def list_items_by_category(
+            session: SessionDep,
+            category: Annotated[
+                str | None,
+                Query(description='Category id, or "none" for templates without a category'),
+            ] = None,
+        ) -> list[Out]:
+            items = lister(session, categories.parse(category))
+            return [schema_out.model_validate(o) for o in items]
 
     @router.post(
         "", response_model=schema_out, status_code=status.HTTP_201_CREATED, dependencies=CONFIGURE
@@ -68,12 +86,20 @@ routers = [
     crud_router("projects", Project, schemas.ProjectIn, schemas.ProjectOut),
     crud_router("inventories", Inventory, schemas.InventoryIn, schemas.InventoryOut),
     crud_router("credentials", Credential, schemas.CredentialIn, schemas.CredentialOut),
-    crud_router("templates", Template, schemas.TemplateIn, schemas.TemplateOut),
+    crud_router("categories", Category, schemas.CategoryIn, schemas.CategoryOut),
+    crud_router(
+        "templates",
+        Template,
+        schemas.TemplateIn,
+        schemas.TemplateOut,
+        by_category=categories.list_templates,
+    ),
     crud_router(
         "schedules",
         Schedule,
         schemas.ScheduleIn,
         schemas.ScheduleOut,
         on_change=schedules.notify_changed,
+        by_category=categories.list_schedules,
     ),
 ]

@@ -1,15 +1,20 @@
 {% extends "base.html" %}
+{% from "_macros.html" import category_filter %}
 {% block title %}Schedules · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
   <h1>Schedules</h1>
+  <form class="filters" hx-get="/ui/schedules" hx-trigger="change" hx-target="#schedules-table"
+        hx-select="#schedules-table" hx-swap="outerHTML" hx-push-url="true">
+    {{ category_filter(categories, category) }}
+  </form>
   {% if user.can(Action.CONFIGURE) %}<a class="button" href="/ui/schedules/new">New schedule</a>{% endif %}
 </div>
-<table class="grid">
+<table class="grid" id="schedules-table">
   <thead><tr><th>#</th><th>Template</th><th>Cron</th><th>Time zone</th><th>Overlap</th><th>Next run (UTC)</th><th>Enabled</th><th></th></tr></thead>
   <tbody>
   {% for s in schedules %}{% include "_schedule_row.html" %}{% else %}
-    <tr><td colspan="8" class="empty">No schedules yet.</td></tr>
+    <tr><td colspan="8" class="empty">{{ 'No schedules in this category.' if category else 'No schedules yet.' }}</td></tr>
   {% endfor %}
   </tbody>
 </table>

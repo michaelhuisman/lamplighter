@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "_macros.html" import category_filter %}
 {% block title %}Runs · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
   <h1>Runs</h1>
   <form id="filters" class="filters" hx-get="/ui/runs" hx-target="#runs-table" hx-trigger="change" hx-push-url="true">
+    {{ category_filter(categories, category) }}
     <label>Template
       <select name="template_id">
         <option value="">All</option>

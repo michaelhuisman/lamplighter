@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import category_badge %}
+{% block title %}Categories · lamplighter{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Categories</h1>
+  <div class="head-actions">
+    <a class="button secondary" href="/ui/templates">← Templates</a>
+    {% if user.can(Action.CONFIGURE) %}<a class="button" href="/ui/categories/new">New category</a>{% endif %}
+  </div>
+</div>
+<p class="muted intro">Categories group templates. Runs and schedules follow the category of their template, so you can filter all three by it.</p>
+<table class="grid">
+  <thead><tr><th>Category</th><th class="num">Templates</th><th></th></tr></thead>
+  <tbody>
+  {% for c in items %}
+    <tr>
+      <td>{{ category_badge(c) }}</td>
+      <td class="num"><a href="/ui/templates?category={{ c.id }}">{{ template_counts.get(c.id, 0) }}</a></td>
+      <td class="actions">
+        {% if user.can(Action.CONFIGURE) %}
+          <a class="button small secondary" href="/ui/categories/{{ c.id }}/edit">Edit</a>
+          <button class="small danger" hx-post="/ui/categories/{{ c.id }}/delete" hx-target="next .row-error"
+                  hx-confirm="Delete category '{{ c.name }}'?">Delete</button>
+          <span class="row-error"></span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="empty">No categories yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

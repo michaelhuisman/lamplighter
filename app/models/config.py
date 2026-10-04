@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, Text, func
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Entity, JsonDict, TimestampMixin
@@ -8,6 +8,8 @@ from app.models.base import Entity, JsonDict, TimestampMixin
 CREDENTIAL_TYPES = ("ssh_key", "vault_password", "git_token", "known_hosts")
 INVENTORY_SOURCES = ("project_file", "inline")
 OVERLAP_POLICIES = ("skip", "queue")
+# Fixed palette for category badges (CSS classes cat-<colour>).
+CATEGORY_COLORS = ("blue", "green", "teal", "purple", "orange", "red", "yellow", "gray")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -54,6 +56,20 @@ class Inventory(TimestampMixin, Entity):
     content: Mapped[str | None] = mapped_column(Text)
 
 
+class Category(TimestampMixin, Entity):
+    """A label to group templates; runs and schedules follow their template's category."""
+
+    __tablename__ = "categories"
+    __table_args__ = (
+        CheckConstraint(_in("color", CATEGORY_COLORS), name="color"),
+        # Unique regardless of case: no "Linux" next to "linux".
+        Index("uq_categories_name_lower", func.lower(text("name")), unique=True),
+    )
+
+    name: Mapped[str] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(Text, server_default="blue")
+
+
 class Template(TimestampMixin, Entity):
     __tablename__ = "templates"
     __table_args__ = (
@@ -75,6 +91,8 @@ class Template(TimestampMixin, Entity):
     # Set: strict host key checking with these known_hosts, regardless of the global setting.
     known_hosts_credential_id: Mapped[int | None] = mapped_column(ForeignKey("credentials.id"))
     timeout_s: Mapped[int | None]
+    # A category in use cannot be deleted (no ON DELETE).
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), index=True)
 
 
 class Schedule(TimestampMixin, Entity):

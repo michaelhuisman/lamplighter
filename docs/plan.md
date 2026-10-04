@@ -189,11 +189,12 @@ template, status, runs, duration_count, duration_sum, duration_buckets (jsonb)
 ```
 GET/POST        /api/v1/projects
 GET/PUT/DELETE  /api/v1/projects/{id}
-(same CRUD for inventories, credentials, templates, schedules;
+(same CRUD for inventories, credentials, categories, templates, schedules;
+ templates and schedules can be filtered with ?category=<id>|none;
  a schedule also has a computed field `next_run_at`)
 
 POST  /api/v1/templates/{id}/launch     body: extra_vars, limit (optional)
-GET   /api/v1/runs                      filters: template_id, status, since
+GET   /api/v1/runs                      filters: template_id, status, since, category
 GET   /api/v1/runs/{id}
 GET   /api/v1/runs/{id}/events          paginated
 GET   /api/v1/runs/{id}/stream          SSE, live events
@@ -593,6 +594,19 @@ pinned to a commit SHA:
   (nullable, `ON DELETE SET NULL`) links the new run to the original; the audit entry
   `run.relaunch` records `relaunched_from`. A run that is still queued or running gives
   409.
+
+## Template categories
+
+- A managed list of categories (`categories`: name, unique regardless of case via
+  `lower(name)`, and a colour from a fixed palette). A template has at most one
+  (`templates.category_id`, no ON DELETE: a category in use cannot be deleted, 409).
+  Runs and schedules follow their template's category.
+- Management on `/ui/categories` (via a "Categories" button on the Templates page, not in
+  the sidebar) and `/api/v1/categories`; the template form has a dropdown.
+- Filter "Category" on the Templates, Schedules and Runs lists (`?category=<id>` or
+  `?category=none` for templates without one; in the URL, so it can be bookmarked), and
+  the same query parameter on `GET /api/v1/templates`, `/schedules` and `/runs`
+  (`app/services/categories.py`).
 
 ## Phase 6 — Kubernetes (Helm)
 

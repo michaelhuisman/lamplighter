@@ -2,3 +2,19 @@
 {% macro icon(name) -%}
 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-{{ name }}"/></svg>
 {%- endmacro %}
+
+{# A template category as a coloured badge (or a dash without one). #}
+{% macro category_badge(category) -%}
+{% if category %}<span class="badge cat cat-{{ category.color }}">{{ category.name }}</span>{% else %}<span class="muted">–</span>{% endif %}
+{%- endmacro %}
+
+{# The category filter of the templates, schedules and runs lists. #}
+{% macro category_filter(categories, selected, extra='') -%}
+<label>Category
+  <select name="category" {{ extra }}>
+    <option value="">All</option>
+    {% for c in categories %}<option value="{{ c.id }}" {% if selected == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    <option value="none" {% if selected == 'none' %}selected{% endif %}>No category</option>
+  </select>
+</label>
+{%- endmacro %}

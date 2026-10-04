@@ -1,4 +1,4 @@
-"""UI: management of projects, inventories and credentials.
+"""UI: management of projects, inventories, credentials and template categories.
 
 Credentials are only references to OpenBao; the UI never accepts secret values.
 """
@@ -13,10 +13,10 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from app.api.deps import SessionDep
-from app.api.schemas import CredentialIn, InventoryIn, ProjectIn
+from app.api.schemas import CategoryIn, CredentialIn, InventoryIn, ProjectIn
 from app.core.auth import Principal
-from app.models import Credential, Entity, Inventory, Project
-from app.models.config import CREDENTIAL_TYPES
+from app.models import Category, Credential, Entity, Inventory, Project, Template
+from app.models.config import CATEGORY_COLORS, CREDENTIAL_TYPES
 from app.services import crud
 from app.services.errors import ServiceError
 from app.ui.common import CanConfigure, CanRead, FormData, actor, clean, redirect, render, validate
@@ -58,6 +58,10 @@ def _prepare_inventory(data: FormData) -> FormData:
     return data
 
 
+def _category_choices(_session: SessionDep) -> dict[str, Any]:
+    return {"colors": CATEGORY_COLORS}
+
+
 def _keep(data: FormData) -> FormData:
     return data
 
@@ -68,6 +72,7 @@ KINDS = {
         Kind("projects", Project, ProjectIn, _keep, _project_choices),
         Kind("inventories", Inventory, InventoryIn, _prepare_inventory, _inventory_choices),
         Kind("credentials", Credential, CredentialIn, _keep, _no_choices),
+        Kind("categories", Category, CategoryIn, _keep, _category_choices),
     )
 }
 
@@ -83,6 +88,13 @@ def _list_context(kind: Kind, session: SessionDep) -> dict[str, Any]:
         ctx["project_names"] = _names(session, Project)
     if kind.slug == "credentials":
         ctx["credential_types"] = CREDENTIAL_TYPES
+    if kind.slug == "categories":
+        ctx["items"] = sorted(ctx["items"], key=lambda c: str(getattr(c, "name", "")).lower())
+        counts: dict[int, int] = {}
+        for t in crud.list_all(session, Template):
+            if t.category_id is not None:
+                counts[t.category_id] = counts.get(t.category_id, 0) + 1
+        ctx["template_counts"] = counts
     return ctx
 
 
@@ -144,7 +156,7 @@ def _register(kind: Kind) -> None:
 
     @router.get(f"{base}/new", response_class=HTMLResponse, name=f"{kind.slug}_new")
     def new_page(request: Request, session: SessionDep, user: CanConfigure) -> HTMLResponse:
-        defaults: FormData = {"branch": "main", "source_type": "project_file"}
+        defaults: FormData = {"branch": "main", "source_type": "project_file", "color": "blue"}
         return _form(request, session, user, kind, None, defaults)
 
     @router.get(f"{base}/{{obj_id}}/edit", response_class=HTMLResponse, name=f"{kind.slug}_edit")
