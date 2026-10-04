@@ -1,13 +1,18 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit schedule' if item else 'New schedule' }} · lamplighter{% endblock %}
+{% set heading = 'Edit schedule' if item else ('Copy of schedule ' ~ copy_of.id if copy_of else 'New schedule') %}
+{% block title %}{{ heading }} · lamplighter{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ 'Edit schedule' if item else 'New schedule' }}</h1>
-  <a class="button secondary" href="/ui/schedules">Cancel</a>
+  <h1>{{ heading }}</h1>
+  <div class="head-actions">
+    {% if item %}<a class="button secondary" href="/ui/schedules/{{ item.id }}/copy">Copy</a>{% endif %}
+    <a class="button secondary" href="/ui/schedules">Cancel</a>
+  </div>
 </div>
 {% if errors.get('__all__') %}<p class="error">{{ errors['__all__'] }}</p>{% endif %}
 <form class="card form" method="post" action="{{ '/ui/schedules/' ~ item.id if item else '/ui/schedules' }}">
   {% include "_csrf.html" %}
+  {% if form.get('copied_from') %}<input type="hidden" name="copied_from" value="{{ form.get('copied_from') }}">{% endif %}
   <label>Template
     <select name="template_id" required>
       <option value="">—</option>

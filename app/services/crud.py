@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Entity
+from app.models import Entity, Template
 from app.services import audit
 from app.services.errors import ConflictError, InvalidReferenceError, NotFoundError
 
@@ -59,6 +59,7 @@ def create[M: Entity](
     values: Mapping[str, Any],
     *,
     actor: audit.Actor | None = None,
+    audit_details: Mapping[str, Any] | None = None,
 ) -> M:
     obj = model(**values)
     with _translate_integrity_errors(session):
@@ -70,7 +71,7 @@ def create[M: Entity](
             f"{model.__tablename__}.create",
             model.__tablename__,
             obj.id,
-            _label(obj),
+            {**_label(obj), **(audit_details or {})},
         )
     session.refresh(obj)
     return obj
@@ -114,3 +115,14 @@ def delete[M: Entity](
         audit.record(
             session, actor, f"{model.__tablename__}.delete", model.__tablename__, obj_id, label
         )
+
+
+def template_copy_name(session: Session, name: str) -> str:
+    """A free name for a copied template: "<name> (copy)", then "(copy 2)", "(copy 3)", ..."""
+    taken = set(session.scalars(select(Template.name).where(Template.name.startswith(name))))
+    candidate = f"{name} (copy)"
+    n = 2
+    while candidate in taken:
+        candidate = f"{name} (copy {n})"
+        n += 1
+    return candidate
