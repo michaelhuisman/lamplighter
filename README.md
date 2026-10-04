@@ -38,7 +38,8 @@ Redis, message broker or Kubernetes required.
   reconnects. `no_log` output and known secret values are filtered out before anything is
   stored.
 - **Run history.** Status, return code, the git commit that ran, the effective extra vars
-  and per-host stats (ok, changed, failed, unreachable, …).
+  and per-host stats (ok, changed, failed, unreachable, …). Relaunch a finished run with
+  the same parameters, or only on the hosts that failed.
 - **Secrets from OpenBao.** SSH keys, vault passwords, git tokens, `known_hosts` and
   webhook URLs are fetched just in time with AppRole. Nothing secret ends up in the
   database, the logs or the run events.

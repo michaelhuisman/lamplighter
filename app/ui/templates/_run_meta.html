@@ -10,6 +10,7 @@
     <div><dt>Duration</dt><dd class="mono">{{ duration(run.started_at, run.finished_at) or '–' }}</dd></div>
     <div><dt>Worker</dt><dd class="mono">{{ run.worker_id or '–' }}</dd></div>
     {% if run.limit %}<div><dt>Limit</dt><dd class="mono">{{ run.limit }}</dd></div>{% endif %}
+    {% if run.relaunch_of %}<div><dt>Relaunch of</dt><dd><a href="/ui/runs/{{ run.relaunch_of }}">run {{ run.relaunch_of }}</a></dd></div>{% endif %}
   </dl>
   {% if run.status_reason %}<p class="reason">{{ run.status_reason }}</p>{% endif %}
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -30,6 +31,22 @@
       </tbody>
     </table></div>
     {% endif %}
+  {% endif %}
+  {% if run.status in FINAL_STATUSES and user.can(Action.LAUNCH) %}
+    <div class="run-actions">
+      <form method="post" action="/ui/runs/{{ run.id }}/relaunch">
+        {% include "_csrf.html" %}
+        <button type="submit" title="A new run with the same extra vars and limit">Relaunch</button>
+      </form>
+      {% if failed_hosts %}
+      <form method="post" action="/ui/runs/{{ run.id }}/relaunch">
+        {% include "_csrf.html" %}
+        <input type="hidden" name="failed_hosts_only" value="1">
+        <button type="submit" class="secondary" title="Limit: {{ failed_hosts | join(', ') }}">
+          Relaunch failed hosts ({{ failed_hosts | length }})</button>
+      </form>
+      {% endif %}
+    </div>
   {% endif %}
   {% if run.status not in FINAL_STATUSES and user.can(Action.CANCEL) and not run.cancel_requested_at %}
     <button class="danger" hx-post="/ui/runs/{{ run.id }}/cancel" hx-target="#run-meta" hx-swap="outerHTML"

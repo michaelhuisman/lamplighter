@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Run, RunEvent, RunStatus, Template
+from app.models.run import FINAL_STATUSES
 from app.services import audit, crud
 from app.services.errors import ConflictError, NotFoundError
 
@@ -44,6 +45,63 @@ def launch(
         "run",
         run.id,
         {"template_id": template.id, "template": template.name, "limit": run.limit},
+    )
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def failed_hosts(run: Run) -> list[str]:
+    """Hosts that failed or were unreachable, from the run's stats (sorted)."""
+    stats = run.stats or {}
+    hosts = {
+        host
+        for key in ("failed", "unreachable")
+        for host, count in (stats.get(key) or {}).items()
+        if count
+    }
+    return sorted(hosts)
+
+
+def relaunch(
+    session: Session,
+    run_id: int,
+    *,
+    triggered_by: str,
+    failed_hosts_only: bool = False,
+    actor: audit.Actor | None = None,
+) -> Run:
+    """A new manual run of the same template with the original run's effective extra vars
+    and limit; with `failed_hosts_only` limited to the hosts that failed or were
+    unreachable. The template's current settings apply (playbook, inventory, ...)."""
+    original = get(session, run_id)
+    if original.status not in FINAL_STATUSES:
+        raise ConflictError(f"run {run_id} is still {original.status}")
+    limit = original.limit
+    if failed_hosts_only:
+        hosts = failed_hosts(original)
+        if not hosts:
+            raise ConflictError(f"run {run_id} has no failed or unreachable hosts")
+        limit = ",".join(hosts)
+    crud.get(session, Template, original.template_id)
+    run = Run(
+        template_id=original.template_id,
+        triggered_by=triggered_by,
+        status=RunStatus.QUEUED,
+        overlap_policy="queue",
+        extra_vars=dict(original.extra_vars),
+        limit=limit,
+        relaunch_of=original.id,
+    )
+    session.add(run)
+    session.flush()
+    audit.record(
+        session,
+        actor,
+        "run.relaunch",
+        "run",
+        run.id,
+        {"relaunched_from": original.id, "failed_hosts_only": failed_hosts_only, "limit": limit},
     )
     session.commit()
     session.refresh(run)

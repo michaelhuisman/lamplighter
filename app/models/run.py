@@ -52,6 +52,8 @@ class Run(Entity):
     template_id: Mapped[int] = mapped_column(ForeignKey("templates.id"))
     schedule_id: Mapped[int | None] = mapped_column(ForeignKey("schedules.id", ondelete="SET NULL"))
     scheduled_for: Mapped[datetime | None]
+    # Set when this run is a relaunch of an earlier run.
+    relaunch_of: Mapped[int | None] = mapped_column(ForeignKey("runs.id", ondelete="SET NULL"))
     # Copied from the schedule on creation; manual runs behave as 'queue'.
     overlap_policy: Mapped[str] = mapped_column(Text, server_default="queue")
     triggered_by: Mapped[str] = mapped_column(Text)

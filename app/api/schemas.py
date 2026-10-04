@@ -155,11 +155,17 @@ class LaunchIn(BaseModel):
     limit: str | None = None
 
 
+class RelaunchIn(BaseModel):
+    # Only the hosts that failed or were unreachable in the original run.
+    failed_hosts_only: bool = False
+
+
 class RunOut(OrmModel):
     id: int
     template_id: int
     schedule_id: int | None
     scheduled_for: datetime | None
+    relaunch_of: int | None
     overlap_policy: Literal["skip", "queue"]
     triggered_by: str
     status: RunStatus

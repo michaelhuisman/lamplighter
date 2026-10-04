@@ -198,6 +198,7 @@ GET   /api/v1/runs/{id}
 GET   /api/v1/runs/{id}/events          paginated
 GET   /api/v1/runs/{id}/stream          SSE, live events
 POST  /api/v1/runs/{id}/cancel
+POST  /api/v1/runs/{id}/relaunch        body: failed_hosts_only (optional)
 
 GET   /healthz                          liveness
 GET   /readyz                           db connection
@@ -573,6 +574,17 @@ pinned to a commit SHA:
   hour as a stacked server-rendered SVG, failing schedules (last finished run not
   successful), the next 5 scheduled runs, the last 10 failures and the maintenance status
   (backup and retention; overdue after 26 hours). Refreshes every 15s via htmx.
+
+## Relaunch
+
+- A finished run can be relaunched (UI button on the run page and
+  `POST /api/v1/runs/{id}/relaunch`, `launch` rights): a new manual run of the same
+  template with the original's effective extra vars and limit, the template's current
+  settings and the latest commit. "Relaunch failed hosts" (`failed_hosts_only`) limits it
+  to the hosts that failed or were unreachable (from the stats). `runs.relaunch_of`
+  (nullable, `ON DELETE SET NULL`) links the new run to the original; the audit entry
+  `run.relaunch` records `relaunched_from`. A run that is still queued or running gives
+  409.
 
 ## Phase 6 — Kubernetes (Helm)
 
