@@ -13,8 +13,17 @@
 <form class="card form" method="post" action="{{ '/ui/templates/' ~ item.id if item else '/ui/templates' }}">
   {% include "_csrf.html" %}
   {% if form.get('copied_from') %}<input type="hidden" name="copied_from" value="{{ form.get('copied_from') }}">{% endif %}
-  <label>Name <input name="name" value="{{ form.get('name') or '' }}" required>
-    {% with field='name' %}{% include "_field_error.html" %}{% endwith %}</label>
+  <div class="row">
+    <label class="grow">Name <input name="name" value="{{ form.get('name') or '' }}" required>
+      {% with field='name' %}{% include "_field_error.html" %}{% endwith %}</label>
+    <label>Category
+      <select name="category_id">
+        <option value="">none</option>
+        {% for c in categories %}<option value="{{ c.id }}" {% if form.get('category_id')|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+      </select>
+      <small class="muted"><a href="/ui/categories">Manage categories</a></small>
+      {% with field='category_id' %}{% include "_field_error.html" %}{% endwith %}</label>
+  </div>
   <div class="row">
     <label>Project
       <select name="project_id" required>

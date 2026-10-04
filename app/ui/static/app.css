@@ -316,3 +316,16 @@ a.tile:hover { text-decoration: none; background: var(--accent-soft); }
 }
 .run-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .run-actions form { margin: 0; }
+
+/* --- template categories ------------------------------------------------------------- */
+.badge.cat { font-weight: 600; }
+.cat-blue { background: rgba(58, 160, 224, .16); color: #3aa0e0; }
+.cat-green { background: rgba(76, 194, 127, .16); color: #3fae6e; }
+.cat-teal { background: rgba(45, 190, 180, .16); color: #26a69a; }
+.cat-purple { background: rgba(160, 120, 230, .18); color: #9a78e0; }
+.cat-orange { background: rgba(240, 140, 60, .18); color: #e0832f; }
+.cat-red { background: rgba(239, 107, 107, .16); color: #e05a5a; }
+.cat-yellow { background: rgba(230, 190, 60, .2); color: #b8941a; }
+.cat-gray { background: rgba(125, 140, 160, .18); color: var(--muted); }
+/* Filters in a page header sit on the right, next to the buttons (not in the middle). */
+.page-head .filters { margin-left: auto; }

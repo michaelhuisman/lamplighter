@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Run, RunEvent, RunStatus, Template
 from app.models.run import FINAL_STATUSES
-from app.services import audit, crud
+from app.services import audit, categories, crud
 from app.services.errors import ConflictError, NotFoundError
 
 # Event sequence numbers start at 0 (lamplighter's setup notes); ansible-runner's at 1.
@@ -117,6 +117,7 @@ class RunFilter:
     template_id: int | None = None
     status: RunStatus | None = None
     since: datetime | None = None
+    category: categories.CategoryFilter = None
     limit: int = 100
     offset: int = 0
 
@@ -129,6 +130,8 @@ def list_runs(session: Session, flt: RunFilter) -> Sequence[Run]:
         stmt = stmt.where(Run.status == flt.status)
     if flt.since is not None:
         stmt = stmt.where(Run.created_at >= flt.since)
+    if flt.category is not None:
+        stmt = categories.apply(stmt.join(Template, Template.id == Run.template_id), flt.category)
     return session.scalars(stmt.limit(flt.limit).offset(flt.offset)).all()
 
 

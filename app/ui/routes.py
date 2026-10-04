@@ -18,7 +18,7 @@ from app.core.auth import Principal
 from app.models import Credential, Inventory, Project, Schedule, Template
 from app.models.run import RunStatus
 from app.scheduler.trigger import build_trigger, next_fire_time
-from app.services import crud, dashboard, runs, schedules
+from app.services import categories, crud, dashboard, runs, schedules
 from app.services.errors import ServiceError
 from app.ui.common import (
     CanCancel,
@@ -60,12 +60,23 @@ def runs_page(
     user: CanRead,
     template_id: Annotated[str | None, Query()] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
+    category: Annotated[str | None, Query()] = None,
 ) -> HTMLResponse:
     tid = int(template_id) if template_id and template_id.isdigit() else None
     st = RunStatus(status_filter) if status_filter in set(RunStatus) else None
-    rows = runs.list_runs(session, runs.RunFilter(template_id=tid, status=st, limit=100))
+    cat = categories.parse(category)
+    rows = runs.list_runs(
+        session, runs.RunFilter(template_id=tid, status=st, category=cat, limit=100)
+    )
     names = {t.id: t.name for t in crud.list_all(session, Template)}
-    ctx: dict[str, Any] = {"runs": rows, "template_names": names, "template_id": tid, "status": st}
+    ctx: dict[str, Any] = {
+        "runs": rows,
+        "template_names": names,
+        "template_id": tid,
+        "status": st,
+        "category": cat,
+        "categories": categories.list_categories(session),
+    }
     # htmx only refreshes the table.
     partial = request.headers.get("HX-Request") == "true"
     return render(request, "_runs_table.html" if partial else "runs.html", user, **ctx)
@@ -134,14 +145,29 @@ def _template_choices(session: SessionDep) -> dict[str, Any]:
         "ssh_credentials": [c for c in creds if c.type == "ssh_key"],
         "vault_credentials": [c for c in creds if c.type == "vault_password"],
         "known_hosts_credentials": [c for c in creds if c.type == "known_hosts"],
+        "categories": categories.list_categories(session),
     }
 
 
 @router.get("/templates", response_class=HTMLResponse)
-def templates_page(request: Request, session: SessionDep, user: CanRead) -> HTMLResponse:
-    items = crud.list_all(session, Template)
-    projects = {p.id: p.name for p in crud.list_all(session, Project)}
-    return render(request, "templates.html", user, templates=items, projects=projects)
+def templates_page(
+    request: Request,
+    session: SessionDep,
+    user: CanRead,
+    category: Annotated[str | None, Query()] = None,
+) -> HTMLResponse:
+    cat = categories.parse(category)
+    cats = categories.list_categories(session)
+    return render(
+        request,
+        "templates.html",
+        user,
+        templates=categories.list_templates(session, cat),
+        projects={p.id: p.name for p in crud.list_all(session, Project)},
+        category=cat,
+        categories=cats,
+        category_by_id={c.id: c for c in cats},
+    )
 
 
 @router.get("/templates/new", response_class=HTMLResponse)
@@ -321,12 +347,25 @@ def _next_run(schedule: Schedule) -> datetime | None:
 
 
 @router.get("/schedules", response_class=HTMLResponse)
-def schedules_page(request: Request, session: SessionDep, user: CanRead) -> HTMLResponse:
-    items = crud.list_all(session, Schedule)
+def schedules_page(
+    request: Request,
+    session: SessionDep,
+    user: CanRead,
+    category: Annotated[str | None, Query()] = None,
+) -> HTMLResponse:
+    cat = categories.parse(category)
+    items = categories.list_schedules(session, cat)
     names = {t.id: t.name for t in crud.list_all(session, Template)}
     next_runs = {s.id: _next_run(s) for s in items}
     return render(
-        request, "schedules.html", user, schedules=items, template_names=names, next_runs=next_runs
+        request,
+        "schedules.html",
+        user,
+        schedules=items,
+        template_names=names,
+        next_runs=next_runs,
+        category=cat,
+        categories=categories.list_categories(session),
     )
 
 

@@ -9,7 +9,7 @@ from app.api.schemas import LaunchIn, RelaunchIn, RunEventOut, RunEventsPage, Ru
 from app.core.auth import Action, Principal
 from app.core.db import get_sessionmaker
 from app.models import RunStatus
-from app.services import runs, stream
+from app.services import categories, runs, stream
 
 READ = [Depends(require(Action.READ))]
 
@@ -43,11 +43,19 @@ def list_runs(
     template_id: int | None = None,
     status: RunStatus | None = None,
     since: datetime | None = None,
+    category: Annotated[
+        str | None, Query(description='Category id, or "none" for templates without a category')
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[RunOut]:
     flt = runs.RunFilter(
-        template_id=template_id, status=status, since=since, limit=limit, offset=offset
+        template_id=template_id,
+        status=status,
+        since=since,
+        category=categories.parse(category),
+        limit=limit,
+        offset=offset,
     )
     return [RunOut.model_validate(r) for r in runs.list_runs(session, flt)]
 

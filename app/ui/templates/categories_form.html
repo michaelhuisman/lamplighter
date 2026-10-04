@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit category' if item else 'New category' }} · lamplighter{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ 'Edit category' if item else 'New category' }}</h1>
+  <a class="button secondary" href="/ui/categories">Cancel</a>
+</div>
+{% if errors.get('__all__') %}<p class="error">{{ errors['__all__'] }}</p>{% endif %}
+<form class="card form narrow" method="post" action="{{ '/ui/categories/' ~ item.id if item else '/ui/categories' }}">
+  {% include "_csrf.html" %}
+  <label>Name <input name="name" value="{{ form.get('name') or '' }}" maxlength="60" required>
+    <small class="muted">Unique, regardless of upper or lower case.</small>
+    {% with field='name' %}{% include "_field_error.html" %}{% endwith %}</label>
+  <fieldset class="choice">
+    <legend>Colour</legend>
+    {% for c in colors %}
+      <label class="check"><input type="radio" name="color" value="{{ c }}" {% if (form.get('color') or 'blue') == c %}checked{% endif %}>
+        <span class="badge cat cat-{{ c }}">{{ c }}</span></label>
+    {% endfor %}
+    {% with field='color' %}{% include "_field_error.html" %}{% endwith %}
+  </fieldset>
+  <div class="form-actions"><button type="submit">Save</button></div>
+</form>
+{% endblock %}

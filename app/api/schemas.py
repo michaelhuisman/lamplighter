@@ -2,8 +2,17 @@ from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
+from app.models.config import CATEGORY_COLORS
 from app.models.run import RunStatus
 from app.scheduler.trigger import InvalidScheduleError, build_trigger, next_fire_time
 
@@ -39,6 +48,20 @@ class CredentialIn(BaseModel):
 class CredentialOut(CredentialIn, OrmModel):
     id: int
     created_at: datetime
+
+
+# --- categories ------------------------------------------------------------
+
+
+class CategoryIn(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+    color: Literal[CATEGORY_COLORS] = "blue"  # type: ignore[valid-type]
+
+
+class CategoryOut(CategoryIn, OrmModel):
+    id: int
+    created_at: datetime
+    updated_at: datetime
 
 
 # --- projects --------------------------------------------------------------
@@ -104,6 +127,7 @@ class TemplateIn(BaseModel):
     machine_credential_id: int
     vault_credential_id: int | None = None
     known_hosts_credential_id: int | None = None
+    category_id: int | None = None
     timeout_s: int | None = Field(default=None, gt=0)
 
 
