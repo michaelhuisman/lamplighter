@@ -20,8 +20,8 @@ concurrency:
 env:
   PYTHON_VERSION: "3.12"
   IMAGE: ghcr.io/${{ github.repository_owner }}/lamplighter
-  # Pinned by digest (multi-arch index of 0.74.0).
-  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+  # Pinned by digest (multi-arch index of 0.76.0).
+  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
 
 jobs:
   lint:
@@ -106,7 +106,7 @@ jobs:
         run: $COMPOSE logs --no-color > compose-logs.txt 2>&1 || true
       - name: Keep logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: compose-logs
           path: compose-logs.txt
@@ -148,7 +148,7 @@ jobs:
           sudo journalctl -u lamplighter-backup.service --no-pager >> deploy-logs.txt 2>&1 || true
       - name: Keep logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: deploy-logs
           path: deploy-logs.txt
@@ -173,7 +173,7 @@ jobs:
             --format sarif --output /src/trivy.sarif localhost/lamplighter:scan
       - name: Upload to the Security tab
         if: always() && github.event_name == 'push'
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy.sarif
           category: trivy-image

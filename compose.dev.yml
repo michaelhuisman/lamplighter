@@ -74,7 +74,7 @@ services:
 
   # Dev only. Realm, clients and test users from .dev/keycloak (scripts/dev-keys.sh).
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.4
+    image: quay.io/keycloak/keycloak:26.8.1
     command: ["start-dev", "--import-realm"]
     environment:
       KC_HOSTNAME: http://localhost:8080
@@ -159,7 +159,7 @@ services:
 
   # Dev only: in-memory OpenBao. Its content comes from openbao-init (dev/openbao/init.sh).
   openbao:
-    image: quay.io/openbao/openbao:2.7.0
+    image: quay.io/openbao/openbao:2.7.1
     command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200"]
     env_file:
       - .dev/secrets/openbao/server.env # root token, dev only
@@ -170,7 +170,7 @@ services:
       retries: 30
 
   openbao-init:
-    image: quay.io/openbao/openbao:2.7.0
+    image: quay.io/openbao/openbao:2.7.1
     entrypoint: ["sh", "/init/init.sh"]
     env_file:
       - .dev/secrets/openbao/init.env
