@@ -172,6 +172,13 @@ def notification_for(run_id: int) -> Notification | None:
         return s.scalar(select(Notification).where(Notification.run_id == run_id))
 
 
+def sent_notification_for(run_id: int) -> Notification | None:
+    """The sender commits after its whole batch, so the sink can have the delivery
+    before the row says `sent`."""
+    note = notification_for(run_id)
+    return note if note is not None and note.status == "sent" else None
+
+
 def test_webhook_on_failed_run(env: Env) -> None:
     run = env.wait(env.launch(env.template("fail.yml"))["id"])
     assert run["status"] == "failed"
@@ -189,9 +196,7 @@ def test_webhook_on_failed_run(env: Env) -> None:
     ).hexdigest()
     assert headers["x-lamplighter-signature"] == f"sha256={expected}"
 
-    note = notification_for(run["id"])
-    assert note is not None
-    assert note.status == "sent"
+    note = wait_for(lambda: sent_notification_for(run["id"]), timeout=30)
     assert note.attempts == 1
     # No URL in the database, only the fingerprint.
     assert "webhook-sink" not in note.target
@@ -204,9 +209,7 @@ def test_webhook_retries_with_backoff(env: Env) -> None:
 
     [delivery] = wait_for(lambda: deliveries_for(run["id"]), timeout=60)
     assert delivery["body"]["status"] == "failed"
-    note = notification_for(run["id"])
-    assert note is not None
-    assert note.status == "sent"
+    note = wait_for(lambda: sent_notification_for(run["id"]), timeout=30)
     assert note.attempts == 3
 
 

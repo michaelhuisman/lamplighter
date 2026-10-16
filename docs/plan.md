@@ -376,7 +376,7 @@ CSRF) and **4b** OpenBao (credentials, git tokens, webhook URLs)._
 - **Audit:** recorded in the same transaction as the change.
 - **CLI:** `python -m app create-user <name> --role admin` (password via prompt or
   stdin) and `python -m app create-token <name> --name <x>`.
-- **Dev:** Keycloak 26.7.4 with a realm import. The client secret and the test passwords
+- **Dev:** Keycloak 26.8.1 with a realm import. The client secret and the test passwords
   are generated in `.dev/` by `scripts/dev-keys.sh`.
 
 **Details 4b**
@@ -402,7 +402,7 @@ CSRF) and **4b** OpenBao (credentials, git tokens, webhook URLs)._
   `target='*'` and knows no webhook secrets. The scheduler leader reads the config from
   OpenBao (cached for `LAMPLIGHTER_WEBHOOK_CACHE_S`) and expands `*` into one row per URL
   fingerprint. If OpenBao is unreachable, the `*` row stays.
-- **Dev:** OpenBao 2.7.0 in dev mode with `openbao-init` (policies, AppRoles with TTL 60s
+- **Dev:** OpenBao 2.7.1 in dev mode with `openbao-init` (policies, AppRoles with TTL 60s
   and max 300s, dev secrets). Plus a `git-http` container (git http-backend with basic
   auth). `scripts/it-secret-scan.sh` searches the container logs for all dev secrets.
 
