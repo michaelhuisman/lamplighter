@@ -83,6 +83,10 @@ def clean_dev_database() -> None:
             text("DELETE FROM users WHERE source = 'local' AND username ~ :pattern"),
             {"pattern": _TEST_USER},
         )
+    # RESTART IDENTITY reuses run ids, so deliveries of an earlier session would match.
+    sink = os.environ.get("LAMPLIGHTER_IT_WEBHOOK_SINK")
+    if sink:
+        httpx.post(f"{sink}/reset", timeout=5).raise_for_status()
 
 
 @pytest.fixture(scope="session")
