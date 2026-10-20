@@ -21,6 +21,7 @@ from app.worker.credentials import (
     CredentialError,
     CredentialRef,
     CredentialResolver,
+    RunTokenIssuer,
     resolve,
     resolve_git,
 )
@@ -39,6 +40,9 @@ LOCK_LOST_REASON = "overlap lock lost"
 # Lamplighter's own setup notes in the run log, before ansible-runner's events (seq >= 1).
 SETUP_NOTE_SEQ = 0
 SETUP_NOTE_EVENT = "lamplighter_note"
+
+# OpenBao token for community.hashi_vault lookups in the playbook.
+RUN_TOKEN_ENV = "ANSIBLE_HASHI_VAULT_TOKEN"  # noqa: S105 - the variable name
 
 # Checks whether the run's overlap lock still belongs to this worker.
 LockGuard = Callable[[], bool]
@@ -250,6 +254,7 @@ class Executor:
         repos: RepoCache,
         runner_fn: RunnerFn = ansible_runner.run,
         collections: CollectionCache | None = None,
+        run_tokens: RunTokenIssuer | None = None,
     ) -> None:
         self._settings = settings
         self._sm = sm
@@ -257,6 +262,7 @@ class Executor:
         self._repos = repos
         self._runner_fn = runner_fn
         self._collections = collections
+        self._run_tokens = run_tokens
 
     def run_dir(self, run_id: int) -> Path:
         return self._settings.runtime_dir / str(run_id)
@@ -364,32 +370,59 @@ class Executor:
         if collections is not None:
             envvars["ANSIBLE_COLLECTIONS_PATH"] = collections.search_path()
 
-        sink = EventSink(self._sm, spec.run_id, SecretMasker(secrets))
-        runner = self._runner_fn(
-            private_data_dir=str(run_dir),
-            project_dir=str(project_dir),
-            playbook=str(playbook.relative_to(project_dir)),
-            inventory=str(inventory),
-            extravars=spec.extra_vars,
-            limit=spec.limit,
-            tags=spec.tags,
-            skip_tags=spec.skip_tags,
-            verbosity=spec.verbosity or None,
-            ssh_key=ssh_key,
-            cmdline=cmdline,
-            envvars=envvars,
-            timeout=spec.timeout_s,
-            settings={"pexpect_timeout": 1},
-            event_handler=sink.handle,
-            cancel_callback=check,
-            process_isolation=False,
-            suppress_env_files=True,
-            quiet=True,
-        )
-        sink.flush()
+        # As late as possible: the TTL is the run's timeout.
+        run_token = self._create_run_token(spec)
+        if run_token is not None:
+            secrets.append(run_token)
+            envvars[RUN_TOKEN_ENV] = run_token
+        try:
+            sink = EventSink(self._sm, spec.run_id, SecretMasker(secrets))
+            runner = self._runner_fn(
+                private_data_dir=str(run_dir),
+                project_dir=str(project_dir),
+                playbook=str(playbook.relative_to(project_dir)),
+                inventory=str(inventory),
+                extravars=spec.extra_vars,
+                limit=spec.limit,
+                tags=spec.tags,
+                skip_tags=spec.skip_tags,
+                verbosity=spec.verbosity or None,
+                ssh_key=ssh_key,
+                cmdline=cmdline,
+                envvars=envvars,
+                timeout=spec.timeout_s,
+                settings={"pexpect_timeout": 1},
+                event_handler=sink.handle,
+                cancel_callback=check,
+                process_isolation=False,
+                suppress_env_files=True,
+                quiet=True,
+            )
+            sink.flush()
+        finally:
+            if run_token is not None:
+                self._revoke_run_token(spec.run_id, run_token)
         status = _RUNNER_STATUS.get(str(runner.status), RunStatus.ERROR)
         rc = runner.rc if isinstance(runner.rc, int) else None
         return status, rc, sink.stats
+
+    def _create_run_token(self, spec: RunSpec) -> str | None:
+        if self._run_tokens is None:
+            return None
+        ttl_s = spec.timeout_s or self._settings.openbao_run_token_ttl_s
+        return self._run_tokens.create(spec.run_id, ttl_s)
+
+    def _revoke_run_token(self, run_id: int, token: str) -> None:
+        """Best effort: the token expires on its own at the end of its TTL anyway."""
+        if self._run_tokens is None:
+            return
+        try:
+            self._run_tokens.revoke(token)
+        except Exception as exc:
+            log.warning(
+                "run token revoke failed",
+                extra={"run_id": run_id, "reason": SecretMasker([token]).mask(str(exc))},
+            )
 
     def _install_collections(
         self, run_id: int, project_dir: Path, masker: SecretMasker

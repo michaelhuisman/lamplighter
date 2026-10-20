@@ -1,7 +1,9 @@
 """Phase 4b: credentials from OpenBao, git via https with a token, webhooks from OpenBao."""
 
+import hashlib
 import json
 import os
+import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -116,6 +118,44 @@ def test_approles_have_least_privilege() -> None:
     )
     with pytest.raises(hvac_exc.Forbidden):
         scheduler.secrets.kv.v2.read_secret_version(path="ssh/ssh-target", mount_point="secret")
+
+
+def test_worker_cannot_read_playbook_secrets_itself() -> None:
+    """Playbook secrets (mount ansible) are only readable with a run token."""
+    with pytest.raises(hvac_exc.Forbidden):
+        approle("worker").secrets.kv.v2.read_secret_version(
+            path="dev/lamplighter", mount_point="ansible", raise_on_deleted_version=True
+        )
+
+
+# --- run token (community.hashi_vault) -----------------------------------------------
+
+
+def test_run_token_for_hashi_vault_lookups(env: Env, bao: hvac.Client) -> None:
+    template = env.template("hashi-vault.yml", timeout_s=120)
+    run = env.wait(env.launch(template)["id"])
+    assert run["status"] == "successful", run
+    stdout = "\n".join(e["stdout"] or "" for e in env.events(run["id"]))
+
+    value = (SECRETS_DIR / "ansible" / "value").read_text().strip()
+    assert f"secret_sha256={hashlib.sha256(value.encode()).hexdigest()}" in stdout
+
+    props = re.search(
+        r"accessor=(\S+) policies=(\S+) ttl=(\d+) renewable=(\w+) orphan=(\w+) run_id=(\d+)",
+        stdout,
+    )
+    assert props, stdout
+    accessor, policies, ttl, renewable, orphan, run_id = props.groups()
+    assert policies == "ansible-read,default"
+    assert 0 < int(ttl) <= 120  # TTL = the template's timeout
+    assert (renewable, orphan, int(run_id)) == ("False", "True", run["id"])
+
+    # The token value itself is masked in the run log.
+    assert re.search(r"token=\*+", stdout), stdout
+    # Revoked after the run (revoke-self).
+    with pytest.raises((hvac_exc.InvalidRequest, hvac_exc.Forbidden)):
+        bao.auth.token.lookup_accessor(accessor)
+    assert db_contains(value) == []
 
 
 # --- credentials ------------------------------------------------------------------

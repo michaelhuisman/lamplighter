@@ -34,9 +34,12 @@ class Hvac:
         self.login_error: Exception | None = None
         self.forbidden_reads = 0
         self.data: dict[str, dict[str, Any]] = {"ssh/a": {"id_ed25519": "KEY", "n": 1}}
+        self.created: list[dict[str, Any]] = []
+        self.forbidden_creates = 0
+        self.create_error: Exception | None = None
         self.auth = SimpleNamespace(
             approle=SimpleNamespace(login=self._login),
-            token=SimpleNamespace(renew_self=self._renew),
+            token=SimpleNamespace(renew_self=self._renew, create=self._create),
         )
         self.secrets = SimpleNamespace(
             kv=SimpleNamespace(v2=SimpleNamespace(read_secret_version=self._read))
@@ -53,6 +56,15 @@ class Hvac:
             raise hvac_exc.Forbidden("renew denied")
         self.renews += 1
         return {"auth": {"lease_duration": self.renew_ttl, "renewable": True}}
+
+    def _create(self, **kwargs: Any) -> dict[str, Any]:
+        if self.forbidden_creates:
+            self.forbidden_creates -= 1
+            raise hvac_exc.Forbidden("permission denied")
+        if self.create_error:
+            raise self.create_error
+        self.created.append(kwargs)
+        return {"auth": {"client_token": "s.CHILD-TOKEN", "lease_duration": kwargs["ttl"]}}
 
     def _read(self, path: str, mount_point: str, raise_on_deleted_version: bool) -> dict[str, Any]:
         if self.forbidden_reads:
@@ -158,6 +170,78 @@ def test_login_failure_is_openbao_error(fake: Hvac, clock: FakeClock, error: Exc
     with pytest.raises(OpenBaoError, match="approle login failed") as exc:
         make(fake, clock).read("ssh/a")
     assert "SECRET-ID-XYZ" not in str(exc.value)
+
+
+def test_create_run_token(fake: Hvac, clock: FakeClock) -> None:
+    token = make(fake, clock).create_run_token(role="lamplighter-run", ttl_s=300, run_id=7)
+    assert token == "s.CHILD-TOKEN"
+    assert fake.logins == 1
+    assert fake.created == [
+        {
+            "role_name": "lamplighter-run",
+            "ttl": "300s",
+            "renewable": False,
+            "display_name": "run-7",
+            "meta": {"run_id": "7"},
+        }
+    ]
+
+
+def test_create_run_token_retries_once_after_login(fake: Hvac, clock: FakeClock) -> None:
+    client = make(fake, clock)
+    fake.forbidden_creates = 1
+    assert client.create_run_token(role="r", ttl_s=60, run_id=1) == "s.CHILD-TOKEN"
+    assert fake.logins == 2
+    fake.forbidden_creates = 2
+    with pytest.raises(OpenBaoError, match="permission denied: token role 'r'"):
+        client.create_run_token(role="r", ttl_s=60, run_id=1)
+
+
+def test_create_run_token_error(fake: Hvac, clock: FakeClock) -> None:
+    fake.create_error = hvac_exc.InvalidRequest("unknown role")
+    with pytest.raises(OpenBaoError, match="cannot create a token with role 'r': InvalidRequest"):
+        make(fake, clock).create_run_token(role="r", ttl_s=60, run_id=1)
+
+
+def test_revoke_token_uses_the_token_itself(fake: Hvac, clock: FakeClock) -> None:
+    used: list[str] = []
+
+    def token_client(token: str) -> SimpleNamespace:
+        used.append(token)
+        return SimpleNamespace(
+            auth=SimpleNamespace(token=SimpleNamespace(revoke_self=lambda: None))
+        )
+
+    client = OpenBaoClient(
+        addr="http://x",
+        role_id="r",
+        secret_id="s",
+        clock=clock,
+        client=fake,
+        token_client=token_client,
+    )
+    client.revoke_token("s.CHILD-TOKEN")
+    assert used == ["s.CHILD-TOKEN"]
+    assert fake.logins == 0  # our own token is not needed
+
+
+def test_revoke_token_error_has_no_token(fake: Hvac, clock: FakeClock) -> None:
+    def revoke_self() -> None:
+        raise requests.ConnectionError("s.CHILD-TOKEN unreachable")
+
+    client = OpenBaoClient(
+        addr="http://x",
+        role_id="r",
+        secret_id="s",
+        clock=clock,
+        client=fake,
+        token_client=lambda _t: SimpleNamespace(
+            auth=SimpleNamespace(token=SimpleNamespace(revoke_self=revoke_self))
+        ),
+    )
+    with pytest.raises(OpenBaoError) as exc_info:
+        client.revoke_token("s.CHILD-TOKEN")
+    assert "s.CHILD-TOKEN" not in str(exc_info.value)
 
 
 def test_askpass_script(tmp_path: Path) -> None:

@@ -9,13 +9,14 @@
 #   .dev/secrets/openbao/*               root token (init + tests only), AppRole ids
 #   .dev/secrets/git/token               token for the git-http server
 #   .dev/secrets/webhook/hmac            HMAC secret for webhooks
+#   .dev/secrets/ansible/value           secret that playbooks read with community.hashi_vault
 #   .dev/secrets/metrics.env             LAMPLIGHTER_METRICS_TOKEN for /metrics
 #   .dev/secrets/ssh-target/host_*       fixed host key of ssh-target + known_hosts
 set -eu
 cd "$(dirname "$0")/.."
 dir=.dev/secrets
 mkdir -p "$dir/ssh-target" "$dir/vault" "$dir/keycloak" "$dir/openbao" "$dir/git" \
-    "$dir/webhook" .dev/keycloak
+    "$dir/webhook" "$dir/ansible" .dev/keycloak
 
 rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-32}"; }
 secret() {  # secret <file>: create it if it does not exist yet, then read it
@@ -51,6 +52,7 @@ printf 'KC_BOOTSTRAP_ADMIN_USERNAME=admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\n' "$k
 secret "$dir/git/token" >/dev/null
 printf 'LAMPLIGHTER_METRICS_TOKEN=%s\n' "$(secret "$dir/metrics-token")" >"$dir/metrics.env"
 secret "$dir/webhook/hmac" >/dev/null
+secret "$dir/ansible/value" >/dev/null
 root_token=$(secret "$dir/openbao/root-token")
 worker_role=$(secret "$dir/openbao/worker-role-id")
 worker_secret=$(secret "$dir/openbao/worker-secret-id")

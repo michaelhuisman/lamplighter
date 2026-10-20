@@ -39,8 +39,12 @@ class OpenBaoClient:
         verify: bool | str = True,
         clock: Callable[[], float] = time.monotonic,
         client: Any = None,  # hvac.Client (untyped); injectable for tests
+        token_client: Callable[[str], Any] | None = None,  # client for another token
     ) -> None:
         self._client = client or hvac.Client(url=addr, verify=verify, timeout=TIMEOUT_S)
+        self._token_client = token_client or (
+            lambda token: hvac.Client(url=addr, token=token, verify=verify, timeout=TIMEOUT_S)
+        )
         self._role_id = role_id
         self._secret_id = secret_id
         self._mount = kv_mount
@@ -141,6 +145,51 @@ class OpenBaoClient:
             raise OpenBaoError(f"cannot read {self._mount}/{path}: {type(exc).__name__}") from exc
         values = resp.get("data", {}).get("data") or {}
         return {str(k): str(v) for k, v in values.items()}
+
+    # --- run tokens ------------------------------------------------------------------
+
+    def create_run_token(self, *, role: str, ttl_s: int, run_id: int) -> str:
+        """A short-lived, non-renewable token for one run, via a token role (orphan, so it
+        survives a re-login of our own token). Policies come from the role."""
+        with self._lock:
+            self._ensure_token()
+            try:
+                resp = self._create_once(role, ttl_s, run_id)
+            except hvac_exc.Forbidden:
+                # Our own token revoked or expired outside our bookkeeping: retry once.
+                self._login()
+                try:
+                    resp = self._create_once(role, ttl_s, run_id)
+                except hvac_exc.Forbidden as exc:
+                    raise OpenBaoError(f"permission denied: token role {role!r}") from exc
+        token = (resp.get("auth") or {}).get("client_token")
+        if not token:
+            raise OpenBaoError(f"token role {role!r} returned no token")
+        return str(token)
+
+    def _create_once(self, role: str, ttl_s: int, run_id: int) -> dict[str, Any]:
+        try:
+            resp: dict[str, Any] = self._client.auth.token.create(
+                role_name=role,
+                ttl=f"{ttl_s}s",
+                renewable=False,
+                display_name=f"run-{run_id}",
+                meta={"run_id": str(run_id)},
+            )
+        except hvac_exc.Forbidden:
+            raise
+        except (hvac_exc.VaultError, requests.RequestException) as exc:
+            raise OpenBaoError(
+                f"cannot create a token with role {role!r}: {type(exc).__name__}"
+            ) from exc
+        return resp
+
+    def revoke_token(self, token: str) -> None:
+        """Revoke a run token with the token itself (revoke-self)."""
+        try:
+            self._token_client(token).auth.token.revoke_self()
+        except (hvac_exc.VaultError, requests.RequestException) as exc:
+            raise OpenBaoError(f"cannot revoke run token: {type(exc).__name__}") from exc
 
     def read_key(self, path: str, key: str) -> str:
         data = self.read(path)

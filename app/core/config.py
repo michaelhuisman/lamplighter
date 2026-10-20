@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     openbao_secret_id: SecretStr | None = None
     openbao_kv_mount: str = "secret"
     openbao_ca_cert: Path | None = None  # CA bundle for TLS; empty = system CAs
+    # Token role for the per-run token that playbooks get as ANSIBLE_HASHI_VAULT_TOKEN
+    # (community.hashi_vault). Empty = no run token.
+    openbao_run_token_role: str | None = "lamplighter-run"  # noqa: S105 - a role name
+    # TTL of the run token for templates without a timeout (otherwise: the timeout).
+    openbao_run_token_ttl_s: int = Field(default=3600, ge=60)
 
     # --- auth ---
     auth_local_enabled: bool = True

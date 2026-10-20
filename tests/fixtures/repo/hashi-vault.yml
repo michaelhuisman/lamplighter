@@ -1,0 +1,30 @@
+- name: Read from OpenBao with the run token (ANSIBLE_HASHI_VAULT_TOKEN)
+  hosts: all
+  gather_facts: false
+  vars:
+    # In production the inventory sets this (or ANSIBLE_HASHI_VAULT_ADDR).
+    ansible_hashi_vault_url: http://openbao:8200
+  tasks:
+    - name: Read the dev secret (KV v2, mount ansible)
+      ansible.builtin.set_fact:
+        dev_secret: >-
+          {{ lookup('community.hashi_vault.vault_kv2_get', 'dev/lamplighter',
+                    engine_mount_point='ansible').secret.value }}
+      no_log: true
+
+    - name: Fingerprint of the secret, never the value
+      ansible.builtin.debug:
+        msg: "secret_sha256={{ dev_secret | hash('sha256') }}"
+
+    - name: Properties of the run token
+      vars:
+        token_info: "{{ lookup('community.hashi_vault.vault_read', 'auth/token/lookup-self').data }}"
+      ansible.builtin.debug:
+        msg: >-
+          accessor={{ token_info.accessor }} policies={{ token_info.policies | sort | join(',') }}
+          ttl={{ token_info.ttl }} renewable={{ token_info.renewable }} orphan={{ token_info.orphan }}
+          run_id={{ token_info.meta.run_id }}
+
+    - name: The token itself is masked in the run log
+      ansible.builtin.debug:
+        msg: "token={{ lookup('ansible.builtin.env', 'ANSIBLE_HASHI_VAULT_TOKEN') }}"

@@ -103,6 +103,7 @@ bao policy write lamplighter-worker - <<'EOF'
 path "secret/data/ssh/*"   { capabilities = ["read"] }
 path "secret/data/vault/*" { capabilities = ["read"] }
 path "secret/data/git/*"   { capabilities = ["read"] }
+path "auth/token/create/lamplighter-run" { capabilities = ["update"] }
 EOF
 bao policy write lamplighter-scheduler - <<'EOF'
 path "secret/data/webhooks/*" { capabilities = ["read"] }
@@ -116,6 +117,30 @@ bao read -field=role_id auth/approle/role/lamplighter-worker/role-id
 bao write -f -field=secret_id auth/approle/role/lamplighter-worker/secret-id
 # ...and the same for lamplighter-scheduler
 ```
+
+Every run also gets its own OpenBao token, so playbooks can read secrets themselves with
+the `community.hashi_vault` collection (part of the image's standard set). The worker
+creates it right before the run through the token role `lamplighter-run` and passes it
+as `ANSIBLE_HASHI_VAULT_TOKEN`. Its TTL is the template's timeout (or
+`LAMPLIGHTER_OPENBAO_RUN_TOKEN_TTL_S`, default 1 hour, for templates without one), it is
+not renewable, and the worker revokes it after the run, also when the run fails. The value
+is masked in the run log. Set `ANSIBLE_HASHI_VAULT_ADDR` (or `ansible_hashi_vault_url`)
+in your inventory; lamplighter does not set it.
+
+The token role grants only the policy `ansible-read` (your policy for the secrets that
+playbooks may read). Its tokens are orphans: they do not depend on the worker's own
+AppRole token, which is renewed and replaced while a long run is still going. The worker
+itself does not get `ansible-read`; it can only create tokens through this role:
+
+```bash
+bao write auth/token/roles/lamplighter-run allowed_policies=ansible-read orphan=true \
+    renewable=false token_explicit_max_ttl=24h
+```
+
+Choose `token_explicit_max_ttl` at least as long as your longest template timeout. To
+turn run tokens off, set `LAMPLIGHTER_OPENBAO_RUN_TOKEN_ROLE` to an empty value for the
+worker; otherwise a run whose token cannot be created ends with status `error`. Update
+OpenBao (role and worker policy) before you deploy this version.
 
 Where secrets live:
 
