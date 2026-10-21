@@ -13,7 +13,13 @@ from app.core.config import Settings
 from app.core.db import get_sessionmaker
 from app.core.openbao import get_openbao
 from app.services import queue
-from app.worker.credentials import CredentialResolver, OpenBaoResolver, UnconfiguredResolver
+from app.worker.credentials import (
+    CredentialResolver,
+    OpenBaoResolver,
+    OpenBaoRunTokens,
+    RunTokenIssuer,
+    UnconfiguredResolver,
+)
 from app.worker.executor import Executor
 from app.worker.galaxy import CollectionCache
 from app.worker.git import RepoCache
@@ -28,6 +34,13 @@ def _resolver() -> CredentialResolver:
         log.warning("OpenBao is not configured: runs that need credentials will fail")
         return UnconfiguredResolver()
     return OpenBaoResolver(client)
+
+
+def _run_tokens(settings: Settings) -> RunTokenIssuer | None:
+    client = get_openbao()
+    if client is None or not settings.openbao_run_token_role:
+        return None
+    return OpenBaoRunTokens(client, settings.openbao_run_token_role)
 
 
 def recover(settings: Settings, sm: sessionmaker[Session], repos: RepoCache) -> None:
@@ -64,7 +77,14 @@ def run_worker(settings: Settings) -> int:
     collections = CollectionCache(
         settings.collections_cache_dir, settings.collections_install_timeout_s
     )
-    executor = Executor(settings, sm, _resolver(), repos, collections=collections)
+    executor = Executor(
+        settings,
+        sm,
+        _resolver(),
+        repos,
+        collections=collections,
+        run_tokens=_run_tokens(settings),
+    )
     locker = PgTemplateLocker(settings.worker_id)
 
     recover(settings, sm, repos)

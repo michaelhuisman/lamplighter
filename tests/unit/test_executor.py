@@ -119,7 +119,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     )
     repos = FakeRepos()
 
-    def make(runner_fn: Any, collections: Any = None) -> Executor:
+    def make(runner_fn: Any, collections: Any = None, run_tokens: Any = None) -> Executor:
         return Executor(
             settings,
             _dummy_session,  # type: ignore[arg-type]
@@ -127,6 +127,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
             repos,  # type: ignore[arg-type]
             runner_fn=runner_fn,
             collections=collections,
+            run_tokens=run_tokens,
         )
 
     return SimpleNamespace(runtime=runtime, rec=rec, make=make, spec=spec_holder, repos=repos)
@@ -340,3 +341,102 @@ def test_collection_install_error_is_masked(env: SimpleNamespace) -> None:
     assert reason.startswith("collection install failed")
     assert "GIT-TOKEN-789" not in reason
     assert not (env.runtime / "5").exists()
+
+
+# --- run token (ANSIBLE_HASHI_VAULT_TOKEN) ---------------------------------------------
+
+RUN_TOKEN = "s.RUN-TOKEN-abcdef"
+
+
+class FakeRunTokens:
+    def __init__(self, create_error: str | None = None, revoke_error: str | None = None) -> None:
+        self.created: list[tuple[int, int]] = []
+        self.revoked: list[str] = []
+        self.create_error = create_error
+        self.revoke_error = revoke_error
+
+    def create(self, run_id: int, ttl_s: int) -> str:
+        if self.create_error:
+            raise CredentialError(self.create_error)
+        self.created.append((run_id, ttl_s))
+        return RUN_TOKEN
+
+    def revoke(self, token: str) -> None:
+        self.revoked.append(token)
+        if self.revoke_error:
+            raise CredentialError(self.revoke_error)
+
+
+def test_run_token_is_passed_masked_and_revoked(env: SimpleNamespace) -> None:
+    tokens = FakeRunTokens()
+    seen: dict[str, Any] = {}
+
+    def fake_runner(**kwargs: Any) -> SimpleNamespace:
+        seen.update(kwargs)
+        assert tokens.revoked == []  # still valid while the playbook runs
+        kwargs["event_handler"]({"counter": 1, "event": "verbose", "stdout": f"t={RUN_TOKEN}"})
+        return _runner_result("successful", 0)
+
+    assert env.make(fake_runner, run_tokens=tokens).execute(5) == RunStatus.SUCCESSFUL
+    assert seen["envvars"]["ANSIBLE_HASHI_VAULT_TOKEN"] == RUN_TOKEN
+    assert "ANSIBLE_HASHI_VAULT_ADDR" not in seen["envvars"]
+    assert seen["suppress_env_files"] is True
+    assert tokens.created == [(5, 30)]  # TTL = the run's timeout
+    assert tokens.revoked == [RUN_TOKEN]
+    assert RUN_TOKEN not in env.rec.events[0]["stdout"]
+
+
+def test_run_token_ttl_without_timeout_comes_from_settings(env: SimpleNamespace) -> None:
+    env.spec["spec"] = _spec(timeout_s=None)
+    tokens = FakeRunTokens()
+    env.make(lambda **_: _runner_result("successful", 0), run_tokens=tokens).execute(5)
+    assert tokens.created == [(5, 3600)]
+
+
+@pytest.mark.parametrize("runner_status", ["failed", "timeout", "canceled"])
+def test_run_token_is_revoked_when_the_run_fails(env: SimpleNamespace, runner_status: str) -> None:
+    tokens = FakeRunTokens()
+    env.make(lambda **_: _runner_result(runner_status, 2), run_tokens=tokens).execute(5)
+    assert tokens.revoked == [RUN_TOKEN]
+
+
+def test_run_token_is_revoked_when_the_runner_raises(env: SimpleNamespace) -> None:
+    def boom(**kwargs: Any) -> None:
+        raise RuntimeError("runner exploded")
+
+    tokens = FakeRunTokens()
+    assert env.make(boom, run_tokens=tokens).execute(5) == RunStatus.ERROR
+    assert tokens.revoked == [RUN_TOKEN]
+
+
+def test_run_token_create_failure_is_setup_error(env: SimpleNamespace) -> None:
+    tokens = FakeRunTokens(create_error="run token: permission denied: token role 'x'")
+    status = env.make(lambda **_: pytest.fail("runner must not start"), run_tokens=tokens).execute(
+        5
+    )
+    assert status == RunStatus.ERROR
+    assert env.rec.finished["reason"] == "run token: permission denied: token role 'x'"
+    assert tokens.revoked == []
+    assert not (env.runtime / "5").exists()
+
+
+def test_run_token_revoke_failure_keeps_status_and_logs_no_token(
+    env: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
+    tokens = FakeRunTokens(revoke_error=f"cannot revoke {RUN_TOKEN}")
+    status = env.make(lambda **_: _runner_result("successful", 0), run_tokens=tokens).execute(5)
+    assert status == RunStatus.SUCCESSFUL
+    records = [r for r in caplog.records if r.getMessage() == "run token revoke failed"]
+    assert records
+    assert all(RUN_TOKEN not in str(r.__dict__) for r in caplog.records)
+
+
+def test_without_run_tokens_no_token_env(env: SimpleNamespace) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_runner(**kwargs: Any) -> SimpleNamespace:
+        seen.update(kwargs)
+        return _runner_result("successful", 0)
+
+    env.make(fake_runner).execute(5)
+    assert "ANSIBLE_HASHI_VAULT_TOKEN" not in seen["envvars"]

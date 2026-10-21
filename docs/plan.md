@@ -248,6 +248,8 @@ GET   /ui/...                           server-rendered UI (Jinja2 + htmx)
 | `LAMPLIGHTER_OPENBAO_SECRET_ID`         | —                                        |
 | `LAMPLIGHTER_OPENBAO_KV_MOUNT`          | `secret`                                 |
 | `LAMPLIGHTER_OPENBAO_CA_CERT`           | — (system CAs)                           |
+| `LAMPLIGHTER_OPENBAO_RUN_TOKEN_ROLE`    | `lamplighter-run` (empty = no run token) |
+| `LAMPLIGHTER_OPENBAO_RUN_TOKEN_TTL_S`   | `3600` (templates without a timeout)     |
 | `LAMPLIGHTER_TRUSTED_PROXIES`           | `127.0.0.1` (IPs/CIDRs, comma-separated) |
 | `LAMPLIGHTER_METRICS_TOKEN`             | — (empty = `/metrics` open)              |
 | `LAMPLIGHTER_RETENTION_EVENTS_DAYS`     | `30` (0 = never)                         |
@@ -402,8 +404,18 @@ CSRF) and **4b** OpenBao (credentials, git tokens, webhook URLs)._
   `target='*'` and knows no webhook secrets. The scheduler leader reads the config from
   OpenBao (cached for `LAMPLIGHTER_WEBHOOK_CACHE_S`) and expands `*` into one row per URL
   fingerprint. If OpenBao is unreachable, the `*` row stays.
+- **Run token** (added after phase 5): before each run the worker creates a token via the
+  token role `lamplighter-run` (orphan, not renewable, policy `ansible-read` + `default`,
+  TTL = the template's timeout or `LAMPLIGHTER_OPENBAO_RUN_TOKEN_TTL_S`, `meta.run_id`).
+  ansible-playbook gets it as `ANSIBLE_HASHI_VAULT_TOKEN` for `community.hashi_vault`
+  lookups; the value is in the SecretMasker and never on disk (`suppress_env_files`).
+  After the run the worker revokes it with revoke-self (in a `finally`; a failed revoke
+  only logs a warning, the TTL limits the damage). Orphan, because a child of the AppRole
+  token would be revoked as soon as that token expires or is replaced mid-run. The
+  worker's own policy only gets `update` on `auth/token/create/lamplighter-run`.
 - **Dev:** OpenBao 2.7.1 in dev mode with `openbao-init` (policies, AppRoles with TTL 60s
-  and max 300s, dev secrets). Plus a `git-http` container (git http-backend with basic
+  and max 300s, dev secrets). Dev also has a KV v2 mount `ansible` with
+  the policy `ansible-read`, the token role and a secret `ansible/dev/lamplighter`. Plus a `git-http` container (git http-backend with basic
   auth). `scripts/it-secret-scan.sh` searches the container logs for all dev secrets.
 
 **Scope:** an OpenBao client (AppRole login, token renew), credential resolution in the

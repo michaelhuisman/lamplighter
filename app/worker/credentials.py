@@ -63,6 +63,34 @@ class OpenBaoResolver:
             raise CredentialError(f"credential {ref.id}: {exc}") from exc
 
 
+class RunTokenIssuer(Protocol):
+    def create(self, run_id: int, ttl_s: int) -> str:
+        """A short-lived token for one run."""
+        ...
+
+    def revoke(self, token: str) -> None: ...
+
+
+class OpenBaoRunTokens:
+    """Run tokens from an OpenBao token role."""
+
+    def __init__(self, client: OpenBaoClient, role: str) -> None:
+        self._client = client
+        self._role = role
+
+    def create(self, run_id: int, ttl_s: int) -> str:
+        try:
+            return self._client.create_run_token(role=self._role, ttl_s=ttl_s, run_id=run_id)
+        except OpenBaoError as exc:
+            raise CredentialError(f"run token: {exc}") from exc
+
+    def revoke(self, token: str) -> None:
+        try:
+            self._client.revoke_token(token)
+        except OpenBaoError as exc:
+            raise CredentialError(str(exc)) from exc
+
+
 class UnconfiguredResolver:
     def fields(self, ref: CredentialRef) -> Mapping[str, str]:
         raise CredentialError(f"credential {ref.id}: no credential backend configured")

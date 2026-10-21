@@ -16,6 +16,7 @@ add() { [ -n "$1" ] && needles+=("$1"); }
 add "$(cat "$dir/vault/password")"
 add "$(cat "$dir/git/token")"
 add "$(cat "$dir/webhook/hmac")"
+add "$(cat "$dir/ansible/value")"
 add "$(cat "$dir/keycloak/client-secret")"
 for f in "$dir"/openbao/*-secret-id "$dir"/keycloak/kc-*; do add "$(cat "$f")"; done
 # SSH key: every content line separately (part of a key is a leak too).
